@@ -1,0 +1,15 @@
+{
+	"InstallScripts" : 
+	[
+		"/home/luisp/.config/minerva_shell/plugin/cmake_install.cmake",
+		"/home/luisp/.config/minerva_shell/plugin/src/Caelestia/cmake_install.cmake",
+		"/home/luisp/.config/minerva_shell/plugin/src/Caelestia/Components/cmake_install.cmake",
+		"/home/luisp/.config/minerva_shell/plugin/src/Caelestia/Config/cmake_install.cmake",
+		"/home/luisp/.config/minerva_shell/plugin/src/Caelestia/Internal/cmake_install.cmake",
+		"/home/luisp/.config/minerva_shell/plugin/src/Caelestia/Models/cmake_install.cmake",
+		"/home/luisp/.config/minerva_shell/plugin/src/Caelestia/Services/cmake_install.cmake",
+		"/home/luisp/.config/minerva_shell/plugin/src/Caelestia/Blobs/cmake_install.cmake",
+		"/home/luisp/.config/minerva_shell/plugin/src/Caelestia/Images/cmake_install.cmake"
+	],
+	"Parallel" : false
+}

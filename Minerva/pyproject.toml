@@ -1,0 +1,16 @@
+[tool.ruff]
+target-version = "py312"
+line-length = 88
+exclude = [".venv", "voice"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "W"]
+
+[tool.ruff.lint.per-file-ignores]
+# Este archivo contiene principalmente prompt y descripciones de JSON Schema;
+# partir esas cadenas perjudica su edición sin cambiar el código ejecutable.
+"backend/tools/definitions.py" = ["E501"]
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"

@@ -1,0 +1,16 @@
+module components
+AppLauncher 1.0 AppLauncher.qml
+ClockCalendar 1.0 ClockCalendar.qml
+MediaWidget 1.0 MediaWidget.qml
+Island 1.0 Island.qml
+ControlCenter 1.0 ControlCenter.qml
+WifiPanel 1.0 WifiPanel.qml
+BluetoothPanel 1.0 BluetoothPanel.qml
+NotificationHistory 1.0 NotificationHistory.qml
+ControlNotification 1.0 ControlNotification.qml
+NotificationToast 1.0 NotificationToast.qml
+LockScreen 1.0 Lock.qml
+Scaler 1.0 Scaler.qml
+WorkspaceBubble 1.0 WorkspaceBubble.qml
+WallpaperPicker 1.0 WallpaperPicker.qml
+PowerMenu 1.0 PowerMenu.qml

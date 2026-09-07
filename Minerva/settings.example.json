@@ -1,0 +1,12 @@
+{
+  "aiProvider": "Gemini",
+  "geminiApiKey": "",
+  "geminiModel": "gemini-2.5-flash",
+  "aiTemperature": "0.7",
+  "ttsProvider": "piper",
+  "fishApiKey": "",
+  "fishVoiceId": "",
+  "fishModel": "s2-pro",
+  "geminiTtsVoice": "Kore",
+  "geminiTtsModel": "gemini-2.5-flash-tts"
+}

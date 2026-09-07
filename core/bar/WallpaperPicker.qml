@@ -1,0 +1,1 @@
+/home/luisp/.config/minerva_shell/components/WallpaperPicker.qml
