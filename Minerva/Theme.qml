@@ -11,5 +11,5 @@ QtObject {
     readonly property color danger: "#ed8796"
 
     readonly property string fontMono: "Symbols Nerd Font, Iosevka Nerd Font"
-    readonly property string fontSans: "Noto Sans, Inter, sans-serif"
+    readonly property string fontSans: "SF Pro, Noto Sans, Inter, sans-serif"
 }

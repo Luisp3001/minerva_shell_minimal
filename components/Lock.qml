@@ -71,6 +71,11 @@ ShellRoot {
     property color crust:    Qt.darker(base, 1.2)
     property color fpGreen:  "#10B981" // Hardcoded vibrant green for fingerprint
 
+    // ── Typography ────────────────────────────────────────────────────────────
+    readonly property string fontSans: "SF Pro, Noto Sans, Inter, sans-serif"
+    readonly property string fontMono: "JetBrains Mono, monospace"
+    readonly property string fontIcon: "Iosevka Nerd Font, Symbols Nerd Font"
+
     // Shared state across all monitors
     QtObject {
         id: lockUI
@@ -406,7 +411,7 @@ ShellRoot {
                             
                             Text {
                                 id: clockHours
-                                font.family: "JetBrains Mono"
+                                font.family: root.fontSans
                                 font.pixelSize: 140 * screenRoot.sc
                                 font.weight: Font.Bold
                                 color: root.text
@@ -414,7 +419,7 @@ ShellRoot {
                             }
                             Text {
                                 text: ":"
-                                font.family: "JetBrains Mono"
+                                font.family: root.fontSans
                                 font.pixelSize: 140 * screenRoot.sc
                                 font.weight: Font.Bold
                                 opacity: 0.5
@@ -423,7 +428,7 @@ ShellRoot {
                             }
                             Text {
                                 id: clockMinutes
-                                font.family: "JetBrains Mono"
+                                font.family: root.fontSans
                                 font.pixelSize: 140 * screenRoot.sc
                                 font.weight: Font.Bold
                                 color: root.text
@@ -434,7 +439,7 @@ ShellRoot {
                         Text {
                             id: dateText
                             Layout.alignment: Qt.AlignHCenter
-                            font.family: "JetBrains Mono"
+                            font.family: root.fontSans
                             font.pixelSize: 22 * screenRoot.sc
                             font.weight: Font.Bold
                             color: root.text
@@ -490,7 +495,7 @@ ShellRoot {
                                 Text {
                                     anchors.centerIn: parent
                                     text: "󰄽"
-                                    font.family: "Iosevka Nerd Font"
+                                    font.family: root.fontIcon
                                     font.pixelSize: 64 * screenRoot.sc
                                     color: root.subtext0
                                 }
@@ -553,7 +558,7 @@ ShellRoot {
                             Text {
                                 Layout.alignment: Qt.AlignLeft
                                 text: screenRoot.currentUser
-                                font.family: "JetBrains Mono"
+                                font.family: root.fontSans
                                 font.pixelSize: 28 * screenRoot.sc
                                 font.weight: Font.Bold
                                 color: root.text
@@ -585,7 +590,7 @@ ShellRoot {
                                     Text {
                                         anchors.centerIn: parent
                                         text: lockUI.failed ? "󰌾" : (lockUI.authenticating ? "󰌿" : (lockUI.waitingForFingerprint ? "󰟾" : "󰌾"))
-                                        font.family: "Iosevka Nerd Font"
+                                        font.family: root.fontIcon
                                         font.pixelSize: 18 * screenRoot.sc
                                         color: lockUI.failed
                                             ? root.red
@@ -595,7 +600,7 @@ ShellRoot {
                                 }
 
                                 Text {
-                                    font.family: "JetBrains Mono"
+                                    font.family: root.fontSans
                                     font.pixelSize: 14 * screenRoot.sc
                                     font.weight: Font.Medium
                                     font.letterSpacing: 2.0
@@ -749,7 +754,7 @@ ShellRoot {
                                             // Render text directly as the delegate to avoid circular layout loops
                                             delegate: Text {
                                                 text: model.isDot ? "•" : model.charStr
-                                                font.family: "JetBrains Mono"
+                                                font.family: root.fontSans
                                                 font.pixelSize: model.isDot ? (32 * screenRoot.sc) : (24 * screenRoot.sc)
                                                 font.weight: Font.Bold
                                                 color: lockUI.failed ? root.red : (lockUI.authenticating ? root.peach : root.text)
@@ -806,8 +811,8 @@ ShellRoot {
 
                         RowLayout { 
                             id: kbLayoutRow; anchors.centerIn: parent; spacing: 8 * screenRoot.sc
-                            Text { text: "󰌌"; font.family: "Iosevka Nerd Font"; font.pixelSize: 18 * screenRoot.sc; color: parent.parent.isHovered ? root.mauve : root.overlay2; Behavior on color { ColorAnimation { duration: 200 } } }
-                            Text { text: screenRoot.kbLayout; font.family: "JetBrains Mono"; font.pixelSize: 14 * screenRoot.sc; font.weight: Font.Black; color: root.text }
+                            Text { text: "󰌌"; font.family: root.fontIcon; font.pixelSize: 18 * screenRoot.sc; color: parent.parent.isHovered ? root.mauve : root.overlay2; Behavior on color { ColorAnimation { duration: 200 } } }
+                            Text { text: screenRoot.kbLayout; font.family: root.fontSans; font.pixelSize: 14 * screenRoot.sc; font.weight: Font.Black; color: root.text }
                         }
                         MouseArea { id: kbMouse; anchors.fill: parent; hoverEnabled: true; enabled: !screenRoot.isPlayingIntro }
                     }
@@ -842,14 +847,14 @@ ShellRoot {
 
                             Text { 
                                 text: screenRoot.batStatus === "Charging" ? "󰂄" : (parseInt(screenRoot.batPct) < 20 ? "󰂃" : "󰁹")
-                                font.family: "Iosevka Nerd Font"
+                                font.family: root.fontIcon
                                 font.pixelSize: 20 * screenRoot.sc
                                 color: batLayoutRow.dynamicBatColor
                                 Behavior on color { ColorAnimation { duration: 200 } }
                             }
                             Text { 
                                 text: screenRoot.batPct + "%"
-                                font.family: "JetBrains Mono"
+                                font.family: root.fontSans
                                 font.pixelSize: 14 * screenRoot.sc
                                 font.weight: Font.Black
                                 color: batLayoutRow.dynamicBatColor
@@ -893,7 +898,7 @@ ShellRoot {
                         // --- SETTINGS SECTION ---
                         Text { 
                             text: "SETTINGS"
-                            font.family: "JetBrains Mono"
+                            font.family: root.fontSans
                             font.weight: Font.Black
                             font.pixelSize: 12 * screenRoot.sc
                             font.letterSpacing: 1.5
@@ -906,7 +911,7 @@ ShellRoot {
                             Layout.fillWidth: true; Layout.leftMargin: 18 * screenRoot.sc; Layout.rightMargin: 18 * screenRoot.sc; Layout.topMargin: 4 * screenRoot.sc
                             Text {
                                 text: "Hide password"
-                                font.family: "JetBrains Mono"
+                                font.family: root.fontSans
                                 font.pixelSize: 14 * screenRoot.sc
                                 font.weight: Font.Medium
                                 color: root.text
@@ -947,7 +952,7 @@ ShellRoot {
                                 Layout.fillWidth: true
                                 Text {
                                     text: "Reveal delay"
-                                    font.family: "JetBrains Mono"
+                                    font.family: root.fontSans
                                     font.pixelSize: 14 * screenRoot.sc
                                     font.weight: Font.Medium
                                     color: root.blue
@@ -955,7 +960,7 @@ ShellRoot {
                                 }
                                 Text { 
                                     text: lockSettings.revealDuration >= 1000 ? (lockSettings.revealDuration / 1000).toFixed(1) + " s" : lockSettings.revealDuration + " ms"
-                                    font.family: "JetBrains Mono"
+                                    font.family: root.fontSans
                                     font.pixelSize: 13 * screenRoot.sc
                                     font.weight: Font.Bold
                                     color: root.peach
@@ -1033,7 +1038,7 @@ ShellRoot {
                         // --- SYSTEM ACTIONS SECTION ---
                         Text {
                             text: "SYSTEM"
-                            font.family: "JetBrains Mono"
+                            font.family: root.fontSans
                             font.weight: Font.Black
                             font.pixelSize: 12 * screenRoot.sc
                             font.letterSpacing: 1.5
@@ -1050,9 +1055,9 @@ ShellRoot {
                             
                             RowLayout {
                                 anchors.fill: parent; anchors.leftMargin: 16 * screenRoot.sc; anchors.rightMargin: 16 * screenRoot.sc; spacing: 0
-                                Text { text: "󰜉"; font.family: "Iosevka Nerd Font"; font.pixelSize: 18 * screenRoot.sc; color: ma1.containsMouse ? root.blue : Qt.rgba(root.blue.r, root.blue.g, root.blue.b, 0.6); Behavior on color { ColorAnimation { duration: 200 } } }
+                                Text { text: "󰜉"; font.family: root.fontIcon; font.pixelSize: 18 * screenRoot.sc; color: ma1.containsMouse ? root.blue : Qt.rgba(root.blue.r, root.blue.g, root.blue.b, 0.6); Behavior on color { ColorAnimation { duration: 200 } } }
                                 Item { Layout.fillWidth: true }
-                                Text { text: "Reboot"; font.family: "JetBrains Mono"; font.pixelSize: 15 * screenRoot.sc; font.weight: Font.Medium; color: ma1.containsMouse ? root.blue : Qt.rgba(root.blue.r, root.blue.g, root.blue.b, 0.6); Behavior on color { ColorAnimation { duration: 200 } } }
+                                Text { text: "Reboot"; font.family: root.fontSans; font.pixelSize: 15 * screenRoot.sc; font.weight: Font.Medium; color: ma1.containsMouse ? root.blue : Qt.rgba(root.blue.r, root.blue.g, root.blue.b, 0.6); Behavior on color { ColorAnimation { duration: 200 } } }
                             }
                             MouseArea { 
                                 id: ma1; anchors.fill: parent; hoverEnabled: true;
@@ -1072,9 +1077,9 @@ ShellRoot {
                             
                             RowLayout {
                                 anchors.fill: parent; anchors.leftMargin: 16 * screenRoot.sc; anchors.rightMargin: 16 * screenRoot.sc; spacing: 0
-                                Text { text: "󰒲"; font.family: "Iosevka Nerd Font"; font.pixelSize: 18 * screenRoot.sc; color: ma2.containsMouse ? root.mauve : Qt.rgba(root.mauve.r, root.mauve.g, root.mauve.b, 0.6); Behavior on color { ColorAnimation { duration: 200 } } }
+                                Text { text: "󰒲"; font.family: root.fontIcon; font.pixelSize: 18 * screenRoot.sc; color: ma2.containsMouse ? root.mauve : Qt.rgba(root.mauve.r, root.mauve.g, root.mauve.b, 0.6); Behavior on color { ColorAnimation { duration: 200 } } }
                                 Item { Layout.fillWidth: true }
-                                Text { text: "Suspend"; font.family: "JetBrains Mono"; font.pixelSize: 15 * screenRoot.sc; font.weight: Font.Medium; color: ma2.containsMouse ? root.mauve : Qt.rgba(root.mauve.r, root.mauve.g, root.mauve.b, 0.6); Behavior on color { ColorAnimation { duration: 200 } } }
+                                Text { text: "Suspend"; font.family: root.fontSans; font.pixelSize: 15 * screenRoot.sc; font.weight: Font.Medium; color: ma2.containsMouse ? root.mauve : Qt.rgba(root.mauve.r, root.mauve.g, root.mauve.b, 0.6); Behavior on color { ColorAnimation { duration: 200 } } }
                             }
                             MouseArea { 
                                 id: ma2; anchors.fill: parent; hoverEnabled: true;
@@ -1094,9 +1099,9 @@ ShellRoot {
                             
                             RowLayout {
                                 anchors.fill: parent; anchors.leftMargin: 16 * screenRoot.sc; anchors.rightMargin: 16 * screenRoot.sc; spacing: 0
-                                Text { text: "󰐥"; font.family: "Iosevka Nerd Font"; font.pixelSize: 18 * screenRoot.sc; color: ma3.containsMouse ? root.red : Qt.rgba(root.red.r, root.red.g, root.red.b, 0.6); Behavior on color { ColorAnimation { duration: 200 } } }
+                                Text { text: "󰐥"; font.family: root.fontIcon; font.pixelSize: 18 * screenRoot.sc; color: ma3.containsMouse ? root.red : Qt.rgba(root.red.r, root.red.g, root.red.b, 0.6); Behavior on color { ColorAnimation { duration: 200 } } }
                                 Item { Layout.fillWidth: true }
-                                Text { text: "Power Off"; font.family: "JetBrains Mono"; font.pixelSize: 15 * screenRoot.sc; font.weight: Font.Medium; color: ma3.containsMouse ? root.red : Qt.rgba(root.red.r, root.red.g, root.red.b, 0.6); Behavior on color { ColorAnimation { duration: 200 } } }
+                                Text { text: "Power Off"; font.family: root.fontSans; font.pixelSize: 15 * screenRoot.sc; font.weight: Font.Medium; color: ma3.containsMouse ? root.red : Qt.rgba(root.red.r, root.red.g, root.red.b, 0.6); Behavior on color { ColorAnimation { duration: 200 } } }
                             }
                             MouseArea { 
                                 id: ma3; anchors.fill: parent; hoverEnabled: true;
@@ -1137,7 +1142,7 @@ ShellRoot {
                     Text {
                         anchors.centerIn: parent
                         text: "󰐥"
-                        font.family: "Iosevka Nerd Font"
+                        font.family: root.fontIcon
                         font.pixelSize: 22 * screenRoot.sc
                         color: screenRoot.powerMenuOpen ? root.red : (powerBtnMa.containsMouse ? root.text : root.subtext0)
                         Behavior on color { ColorAnimation { duration: 200 } }
@@ -1221,7 +1226,7 @@ ShellRoot {
                             id: introIconUnlocked
                             anchors.centerIn: parent
                             text: "󰌿"
-                            font.family: "Iosevka Nerd Font"
+                            font.family: root.fontIcon
                             font.pixelSize: 64 * screenRoot.sc 
                             color: root.text
                             opacity: 1.0
@@ -1233,7 +1238,7 @@ ShellRoot {
                             id: introIconLocked
                             anchors.centerIn: parent
                             text: "󰌾"
-                            font.family: "Iosevka Nerd Font"
+                            font.family: root.fontIcon
                             font.pixelSize: 64 * screenRoot.sc 
                             color: root.text
                             opacity: 0.0

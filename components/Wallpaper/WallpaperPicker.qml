@@ -29,7 +29,7 @@ Item {
     readonly property color clrBgPill: Qt.rgba(0.08, 0.08, 0.1, 0.7)
     readonly property color clrCardBg: "#111114"
     readonly property color clrBorder: "#313244"
-    readonly property string fontSans: "Noto Sans, Inter, sans-serif"
+    readonly property string fontSans: "SF Pro, Noto Sans, Inter, sans-serif"
     readonly property string fontMono: "JetBrains Mono, monospace"
     readonly property string fontIcon: "Symbols Nerd Font, Iosevka Nerd Font"
 
@@ -241,6 +241,19 @@ Item {
             Layout.fillHeight: false
             spacing: 8
 
+
+            Text { 
+                id: wallpaperLabel
+                anchors.verticalCenter: parent.verticalCenter
+                text: "Wallpapers"
+                color: root.clrText
+                anchors.left: parent.left
+                anchors.rightMargin: 10
+                font.family: root.fontSans
+                font.pixelSize: 15
+                font.weight: Font.DemiBold
+            }
+
             // Campo de búsqueda integrado
             Rectangle {
                 anchors.centerIn: parent
@@ -336,31 +349,6 @@ Item {
                 }
             }
 
-            // Indicador de etiquetado AI en tiempo real
-            RowLayout {
-                visible: root.isTagging
-                Layout.preferredHeight: 32
-                Layout.maximumHeight: 32
-                Layout.fillHeight: false
-                spacing: 6
-                Rectangle {
-                    width: 7; height: 7; radius: 3.5; color: root.clrAccent
-                    SequentialAnimation on opacity {
-                        loops: Animation.Infinite
-                        running: root.isTagging
-                        NumberAnimation { to: 0.25; duration: 750 }
-                        NumberAnimation { to: 1.0; duration: 750 }
-                    }
-                }
-                Text {
-                    text: "Generando tags..."
-                    color: root.clrAccent
-                    font.family: root.fontSans
-                    font.pixelSize: 11
-                    font.weight: Font.DemiBold
-                }
-            }
-
             Item {
                 Layout.fillWidth: true
                 Layout.preferredHeight: 32
@@ -418,6 +406,32 @@ Item {
                     cursorShape: Qt.PointingHandCursor
                     onClicked: root.closeRequested()
                 }
+            }
+        }
+
+        // Indicador de etiquetado AI en tiempo real (movido debajo del cuadro de búsqueda)
+        RowLayout {
+            visible: root.isTagging
+            Layout.alignment: Qt.AlignHCenter
+            Layout.preferredHeight: 20
+            Layout.fillHeight: false
+            spacing: 6
+
+            Rectangle {
+                width: 7; height: 7; radius: 3.5; color: root.clrAccent
+                SequentialAnimation on opacity {
+                    loops: Animation.Infinite
+                    running: root.isTagging
+                    NumberAnimation { to: 0.25; duration: 750 }
+                    NumberAnimation { to: 1.0; duration: 750 }
+                }
+            }
+            Text {
+                text: "Generando tags por IA..."
+                color: root.clrAccent
+                font.family: root.fontSans
+                font.pixelSize: 11
+                font.weight: Font.DemiBold
             }
         }
 

@@ -17,7 +17,7 @@ Item {
     readonly property color foreground: "#f5f2f4"
     readonly property color card: "#181719"
     readonly property color cardHover: "#78d1d3"
-    readonly property string fontSans: "Noto Sans, Inter, sans-serif"
+    readonly property string fontSans: "SF Pro, Noto Sans, Inter, sans-serif"
     readonly property string fontIcon: "Symbols Nerd Font, Iosevka Nerd Font"
 
     property int selectedIdx: 0

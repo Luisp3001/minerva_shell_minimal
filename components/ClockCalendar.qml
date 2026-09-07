@@ -59,7 +59,7 @@ Item {
         color: "#FFFFFF"
         font.pixelSize: root.isExpanded ? 18 : 16
         font.weight: Font.DemiBold
-        font.family: "SF Pro Display Black"
+        font.family: "SF Pro Display, SF Pro, sans-serif"
         font.letterSpacing: root.isExpanded ? 0.5 : 0.0
 
         Behavior on x {
@@ -151,7 +151,7 @@ Item {
                         color:"#8c92ac"
                         font.pixelSize: modelData.isToday ? 9 : 10
                         font.weight: modelData.isToday ? Font.Bold : Font.Normal
-                        font.family: "Noto Sans, Inter, system-ui, sans-serif"
+                        font.family: "SF Pro, Noto Sans, Inter, system-ui, sans-serif"
                     }
 
                     // Número del día
@@ -161,7 +161,7 @@ Item {
                         color: modelData.isWeekend ? "#f38ba8" : '#8c92ac'
                         font.pixelSize: modelData.isToday ? 14 : 12
                         font.weight: modelData.isToday ? Font.Bold : Font.Normal
-                        font.family: "Noto Sans, Inter, system-ui, sans-serif"
+                        font.family: "SF Pro, Noto Sans, Inter, system-ui, sans-serif"
                     }
 
                 }

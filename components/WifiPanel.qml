@@ -15,7 +15,7 @@ Item {
     readonly property color muted: "#969197"
     readonly property color card: "#181719"
     readonly property color cardHover: "#232125"
-    readonly property string fontSans: "Noto Sans, Inter, sans-serif"
+    readonly property string fontSans: "SF Pro, Noto Sans, Inter, sans-serif"
     readonly property string fontIcon: "Symbols Nerd Font, Iosevka Nerd Font"
 
     property bool wifiEnabled: false

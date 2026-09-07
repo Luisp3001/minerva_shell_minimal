@@ -125,7 +125,7 @@ Item {
                 color: "#ffffff"
                 font.pixelSize: 14
                 font.weight: Font.DemiBold
-                font.family: "Noto Sans, Inter, system-ui, sans-serif"
+                font.family: "SF Pro, Noto Sans, Inter, system-ui, sans-serif"
                 elide: Text.ElideRight
                 Layout.maximumWidth: 155
             }
@@ -135,7 +135,7 @@ Item {
                 text: root.currentArtist
                 color: "#a6adc8"
                 font.pixelSize: 11
-                font.family: "Noto Sans, Inter, system-ui, sans-serif"
+                font.family: "SF Pro, Noto Sans, Inter, system-ui, sans-serif"
                 elide: Text.ElideRight
                 Layout.maximumWidth: 155
             }

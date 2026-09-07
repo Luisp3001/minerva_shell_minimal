@@ -39,7 +39,7 @@ Item {
     readonly property color clrInputBg:  "#0b0b10"
 
     // ── Tipografía ───────────────────────────────────────────────────────────
-    readonly property string fontSans: "Noto Sans, Inter, system-ui, sans-serif"
+    readonly property string fontSans: "SF Pro, Noto Sans, Inter, system-ui, sans-serif"
     readonly property string fontNerd: "Iosevka Nerd Font, Symbols Nerd Font"
     readonly property string fontMono: "JetBrains Mono, monospace"
 

@@ -271,7 +271,7 @@ Rectangle {
             : "#cdd6f4"
         font.pixelSize: 15
         font.weight: Font.DemiBold
-        font.family: "Noto Sans, Inter, system-ui, sans-serif"
+        font.family: "SF Pro, Noto Sans, Inter, system-ui, sans-serif"
     }
 
     // ── Interacción: Clic para ir al workspace urgente, Hover y Scroll ───────

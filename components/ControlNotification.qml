@@ -63,7 +63,7 @@ Rectangle {
                     Layout.fillWidth: true
                     text: root.appName
                     color: "#969197"
-                    font.family: "Noto Sans, Inter, sans-serif"
+                    font.family: "SF Pro, Noto Sans, Inter, sans-serif"
                     font.pixelSize: 10
                     elide: Text.ElideRight
                 }
@@ -71,7 +71,7 @@ Rectangle {
                 Text {
                     text: root.time
                     color: "#6f6b70"
-                    font.family: "Noto Sans, Inter, sans-serif"
+                    font.family: "SF Pro, Noto Sans, Inter, sans-serif"
                     font.pixelSize: 9
                 }
             }
@@ -80,7 +80,7 @@ Rectangle {
                 Layout.fillWidth: true
                 text: root.summary
                 color: "#f4f1f3"
-                font.family: "Noto Sans, Inter, sans-serif"
+                font.family: "SF Pro, Noto Sans, Inter, sans-serif"
                 font.pixelSize: 12
                 font.weight: Font.DemiBold
                 elide: Text.ElideRight
@@ -91,7 +91,7 @@ Rectangle {
                 visible: text.length > 0
                 text: root.body.replace(/\n/g, " ")
                 color: "#aaa5aa"
-                font.family: "Noto Sans, Inter, sans-serif"
+                font.family: "SF Pro, Noto Sans, Inter, sans-serif"
                 font.pixelSize: 10
                 maximumLineCount: 1
                 elide: Text.ElideRight
