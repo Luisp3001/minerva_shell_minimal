@@ -1,6 +1,7 @@
 import QtQuick
 import QtQuick.Layouts
 import QtQuick.Effects
+import "Wallpaper"
 import "../Minerva" as Minerva
 
 // ── Dynamic Island ───────────────────────────────────────────────────────────

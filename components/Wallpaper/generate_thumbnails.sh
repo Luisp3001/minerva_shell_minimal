@@ -64,7 +64,7 @@ done
 # --- Tag wallpapers with AI (runs in background) ---
 TAGGER_SCRIPT="$(dirname "$0")/wallpaper_tagger.py"
 if [ ! -f "$TAGGER_SCRIPT" ]; then
-    TAGGER_SCRIPT="$(dirname "$0")/core/bar/wallpaper_tagger.py"
+    TAGGER_SCRIPT="$(dirname "$0")/components/Wallpaper/wallpaper_tagger.py"
 fi
 if [ -f "$TAGGER_SCRIPT" ] && command -v ollama &>/dev/null; then
     # Don't launch if already running

@@ -2,7 +2,7 @@
 
 # Watch the wallpaper directory for new files
 WATCH_DIR="$HOME/wallpaper"
-SCRIPT_TO_RUN="$HOME/.config/minerva_shell/core/bar/generate_thumbnails.sh"
+SCRIPT_TO_RUN="$HOME/.config/minerva_shell/components/Wallpaper/generate_thumbnails.sh"
 
 # Ensure the directory exists
 mkdir -p "$WATCH_DIR"
