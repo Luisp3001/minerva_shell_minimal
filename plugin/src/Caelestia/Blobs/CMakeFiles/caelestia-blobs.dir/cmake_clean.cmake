@@ -1,0 +1,43 @@
+file(REMOVE_RECURSE
+  "../../../qml/Caelestia/Blobs/caelestia-blobs.qmltypes"
+  ".qsb/shaders/blob.frag.qsb"
+  ".qsb/shaders/blob.vert.qsb"
+  ".qt/rcc/qrc_blob_shaders.cpp"
+  ".qt/rcc/qrc_qmake_Caelestia_Blobs.cpp"
+  "CMakeFiles/caelestia-blobs.dir/link.d"
+  "CMakeFiles/caelestia-blobs_autogen.dir/AutogenUsed.txt"
+  "CMakeFiles/caelestia-blobs_autogen.dir/ParseCache.txt"
+  "caelestia-blobs_autogen"
+  "CMakeFiles/caelestia-blobs.dir/.qt/rcc/qrc_blob_shaders.cpp.o"
+  "CMakeFiles/caelestia-blobs.dir/.qt/rcc/qrc_blob_shaders.cpp.o.d"
+  "CMakeFiles/caelestia-blobs.dir/.qt/rcc/qrc_qmake_Caelestia_Blobs.cpp.o"
+  "CMakeFiles/caelestia-blobs.dir/.qt/rcc/qrc_qmake_Caelestia_Blobs.cpp.o.d"
+  "CMakeFiles/caelestia-blobs.dir/blobgroup.cpp.o"
+  "CMakeFiles/caelestia-blobs.dir/blobgroup.cpp.o.d"
+  "CMakeFiles/caelestia-blobs.dir/blobinvertedrect.cpp.o"
+  "CMakeFiles/caelestia-blobs.dir/blobinvertedrect.cpp.o.d"
+  "CMakeFiles/caelestia-blobs.dir/blobmaterial.cpp.o"
+  "CMakeFiles/caelestia-blobs.dir/blobmaterial.cpp.o.d"
+  "CMakeFiles/caelestia-blobs.dir/blobrect.cpp.o"
+  "CMakeFiles/caelestia-blobs.dir/blobrect.cpp.o.d"
+  "CMakeFiles/caelestia-blobs.dir/blobshape.cpp.o"
+  "CMakeFiles/caelestia-blobs.dir/blobshape.cpp.o.d"
+  "CMakeFiles/caelestia-blobs.dir/caelestia-blobs_autogen/mocs_compilation.cpp.o"
+  "CMakeFiles/caelestia-blobs.dir/caelestia-blobs_autogen/mocs_compilation.cpp.o.d"
+  "CMakeFiles/caelestia-blobs.dir/caelestia-blobs_qmltyperegistrations.cpp.o"
+  "CMakeFiles/caelestia-blobs.dir/caelestia-blobs_qmltyperegistrations.cpp.o.d"
+  "CMakeFiles/caelestia-blobs.dir/cmake_pch.hxx.gch"
+  "CMakeFiles/caelestia-blobs.dir/cmake_pch.hxx.gch.d"
+  "caelestia-blobs_qmltyperegistrations.cpp"
+  "libcaelestia-blobs.pdb"
+  "libcaelestia-blobs.so"
+  "meta_types/caelestia-blobs_json_file_list.txt"
+  "meta_types/caelestia-blobs_json_file_list.txt.timestamp"
+  "meta_types/qt6caelestia-blobs_metatypes.json"
+  "meta_types/qt6caelestia-blobs_metatypes.json.gen"
+)
+
+# Per-language clean rules from dependency scanning.
+foreach(lang CXX)
+  include(CMakeFiles/caelestia-blobs.dir/cmake_clean_${lang}.cmake OPTIONAL)
+endforeach()

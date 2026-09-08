@@ -1,0 +1,6 @@
+<RCC>
+  <qresource prefix="/qt/qml/Caelestia/Internal">
+    <file alias="qmldir">/home/luisp/.config/minerva_shell/plugin/qml/Caelestia/Internal/qmldir</file>
+  </qresource>
+</RCC>
+

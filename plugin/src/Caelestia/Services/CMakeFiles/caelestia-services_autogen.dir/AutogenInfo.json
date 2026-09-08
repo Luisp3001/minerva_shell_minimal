@@ -1,0 +1,286 @@
+{
+	"BUILD_DIR" : "/home/luisp/.config/minerva_shell/plugin/src/Caelestia/Services/caelestia-services_autogen",
+	"CMAKE_BINARY_DIR" : "/home/luisp/.config/minerva_shell/plugin",
+	"CMAKE_CURRENT_BINARY_DIR" : "/home/luisp/.config/minerva_shell/plugin/src/Caelestia/Services",
+	"CMAKE_CURRENT_SOURCE_DIR" : "/home/luisp/.config/minerva_shell/plugin/src/Caelestia/Services",
+	"CMAKE_EXECUTABLE" : "/usr/bin/cmake",
+	"CMAKE_LIST_FILES" : 
+	[
+		"/home/luisp/.config/minerva_shell/plugin/src/Caelestia/Services/CMakeLists.txt",
+		"/usr/lib/cmake/Qt6Core/Qt6CoreConfigureFileTemplate.in",
+		"/usr/lib/cmake/Qt6Qml/Qt6QmlPluginTemplate.cpp.in",
+		"/usr/lib/cmake/Qt6Qml/Qt6QmlModuleDirMappingTemplate.qrc.in",
+		"/usr/lib/cmake/Qt6Qml/Qt6qmldirTemplate.cmake.in",
+		"/home/luisp/.config/minerva_shell/plugin/src/Caelestia/Services/caelestia-servicesplugin_Caelestia_ServicesPlugin_in.cpp"
+	],
+	"CMAKE_SOURCE_DIR" : "/home/luisp/.config/minerva_shell/plugin",
+	"CROSS_CONFIG" : false,
+	"DEP_FILE" : "/home/luisp/.config/minerva_shell/plugin/src/Caelestia/Services/caelestia-services_autogen/deps",
+	"DEP_FILE_RULE_NAME" : "caelestia-services_autogen/timestamp",
+	"HEADERS" : 
+	[
+		[
+			"/home/luisp/.config/minerva_shell/plugin/src/Caelestia/Services/audiocollector.hpp",
+			"MU",
+			"EWIEGA46WW/moc_audiocollector.cpp",
+			null
+		],
+		[
+			"/home/luisp/.config/minerva_shell/plugin/src/Caelestia/Services/audioprovider.hpp",
+			"MU",
+			"EWIEGA46WW/moc_audioprovider.cpp",
+			null
+		],
+		[
+			"/home/luisp/.config/minerva_shell/plugin/src/Caelestia/Services/beattracker.hpp",
+			"MU",
+			"EWIEGA46WW/moc_beattracker.cpp",
+			null
+		],
+		[
+			"/home/luisp/.config/minerva_shell/plugin/src/Caelestia/Services/cavaprovider.hpp",
+			"MU",
+			"EWIEGA46WW/moc_cavaprovider.cpp",
+			null
+		],
+		[
+			"/home/luisp/.config/minerva_shell/plugin/src/Caelestia/Services/cpu.hpp",
+			"MU",
+			"EWIEGA46WW/moc_cpu.cpp",
+			null
+		],
+		[
+			"/home/luisp/.config/minerva_shell/plugin/src/Caelestia/Services/diskinfo.hpp",
+			"MU",
+			"EWIEGA46WW/moc_diskinfo.cpp",
+			null
+		],
+		[
+			"/home/luisp/.config/minerva_shell/plugin/src/Caelestia/Services/gpu.hpp",
+			"MU",
+			"EWIEGA46WW/moc_gpu.cpp",
+			null
+		],
+		[
+			"/home/luisp/.config/minerva_shell/plugin/src/Caelestia/Services/lyriccandidate.hpp",
+			"MU",
+			"EWIEGA46WW/moc_lyriccandidate.cpp",
+			null
+		],
+		[
+			"/home/luisp/.config/minerva_shell/plugin/src/Caelestia/Services/lyrics.hpp",
+			"MU",
+			"EWIEGA46WW/moc_lyrics.cpp",
+			null
+		],
+		[
+			"/home/luisp/.config/minerva_shell/plugin/src/Caelestia/Services/memory.hpp",
+			"MU",
+			"EWIEGA46WW/moc_memory.cpp",
+			null
+		],
+		[
+			"/home/luisp/.config/minerva_shell/plugin/src/Caelestia/Services/sensorslib.hpp",
+			"MU",
+			"EWIEGA46WW/moc_sensorslib.cpp",
+			null
+		],
+		[
+			"/home/luisp/.config/minerva_shell/plugin/src/Caelestia/Services/service.hpp",
+			"MU",
+			"EWIEGA46WW/moc_service.cpp",
+			null
+		],
+		[
+			"/home/luisp/.config/minerva_shell/plugin/src/Caelestia/Services/serviceref.hpp",
+			"MU",
+			"EWIEGA46WW/moc_serviceref.cpp",
+			null
+		],
+		[
+			"/home/luisp/.config/minerva_shell/plugin/src/Caelestia/Services/storage.hpp",
+			"MU",
+			"EWIEGA46WW/moc_storage.cpp",
+			null
+		],
+		[
+			"/home/luisp/.config/minerva_shell/plugin/src/Caelestia/Services/tickingservice.hpp",
+			"MU",
+			"EWIEGA46WW/moc_tickingservice.cpp",
+			null
+		],
+		[
+			"/home/luisp/.config/minerva_shell/plugin/src/Caelestia/Services/usagefmt.hpp",
+			"MU",
+			"EWIEGA46WW/moc_usagefmt.cpp",
+			null
+		]
+	],
+	"HEADER_EXTENSIONS" : [ "h", "hh", "h++", "hm", "hpp", "hxx", "in", "txx" ],
+	"INCLUDE_DIR" : "/home/luisp/.config/minerva_shell/plugin/src/Caelestia/Services/caelestia-services_autogen/include",
+	"MOC_COMPILATION_FILE" : "/home/luisp/.config/minerva_shell/plugin/src/Caelestia/Services/caelestia-services_autogen/mocs_compilation.cpp",
+	"MOC_DEFINITIONS" : 
+	[
+		"QT_CORE_LIB",
+		"QT_NETWORK_LIB",
+		"QT_NO_DEBUG",
+		"QT_QMLINTEGRATION_LIB",
+		"QT_QML_LIB",
+		"caelestia_services_EXPORTS"
+	],
+	"MOC_DEPEND_FILTERS" : 
+	[
+		[
+			"Q_PLUGIN_METADATA",
+			"[\n][ \t]*Q_PLUGIN_METADATA[ \t]*\\([^\\)]*FILE[ \t]*\"([^\"]+)\""
+		]
+	],
+	"MOC_INCLUDES" : 
+	[
+		"/home/luisp/.config/minerva_shell/plugin/src/Caelestia/Services",
+		"/usr/include/qt6/QtQml",
+		"/usr/include/qt6",
+		"/usr/include/qt6/QtCore",
+		"/usr/lib/qt6/mkspecs/linux-g++",
+		"/usr/include/qt6/QtQmlIntegration",
+		"/usr/include/qt6/QtNetwork",
+		"/usr/include/pipewire-0.3",
+		"/usr/include/spa-0.2",
+		"/usr/include/cava",
+		"/usr/include/cava/input",
+		"/usr/include/cava/output",
+		"/usr/include",
+		"/usr/include/c++/16",
+		"/usr/include/c++/16/x86_64-pc-linux-gnu",
+		"/usr/include/c++/16/backward",
+		"/usr/lib/gcc/x86_64-pc-linux-gnu/16/include",
+		"/usr/local/include"
+	],
+	"MOC_MACRO_NAMES" : 
+	[
+		"Q_OBJECT",
+		"Q_GADGET",
+		"Q_NAMESPACE",
+		"Q_NAMESPACE_EXPORT",
+		"Q_GADGET_EXPORT",
+		"Q_ENUM_NS"
+	],
+	"MOC_OPTIONS" : [ "--output-json" ],
+	"MOC_PATH_PREFIX" : false,
+	"MOC_PREDEFS_CMD" : 
+	[
+		"/usr/bin/c++",
+		"-w",
+		"-dM",
+		"-E",
+		"/usr/share/cmake/Modules/CMakeCXXCompilerABI.cpp"
+	],
+	"MOC_PREDEFS_FILE" : "/home/luisp/.config/minerva_shell/plugin/src/Caelestia/Services/caelestia-services_autogen/moc_predefs.h",
+	"MOC_RELAXED_MODE" : false,
+	"MOC_SKIP" : 
+	[
+		"/home/luisp/.config/minerva_shell/plugin/src/Caelestia/Services/.qt/rcc/qrc_qmake_Caelestia_Services.cpp",
+		"/home/luisp/.config/minerva_shell/plugin/src/Caelestia/Services/caelestia-services_qmltyperegistrations.cpp"
+	],
+	"MULTI_CONFIG" : false,
+	"PARALLEL" : 6,
+	"PARSE_CACHE_FILE" : "/home/luisp/.config/minerva_shell/plugin/src/Caelestia/Services/CMakeFiles/caelestia-services_autogen.dir/ParseCache.txt",
+	"QT_MOC_EXECUTABLE" : "/usr/lib/qt6/moc",
+	"QT_UIC_EXECUTABLE" : "",
+	"QT_VERSION_MAJOR" : 6,
+	"QT_VERSION_MINOR" : 11,
+	"SETTINGS_FILE" : "/home/luisp/.config/minerva_shell/plugin/src/Caelestia/Services/CMakeFiles/caelestia-services_autogen.dir/AutogenUsed.txt",
+	"SOURCES" : 
+	[
+		[
+			"/home/luisp/.config/minerva_shell/plugin/src/Caelestia/Services/audiocollector.cpp",
+			"MU",
+			null
+		],
+		[
+			"/home/luisp/.config/minerva_shell/plugin/src/Caelestia/Services/audioprovider.cpp",
+			"MU",
+			null
+		],
+		[
+			"/home/luisp/.config/minerva_shell/plugin/src/Caelestia/Services/beattracker.cpp",
+			"MU",
+			null
+		],
+		[
+			"/home/luisp/.config/minerva_shell/plugin/src/Caelestia/Services/cavaprovider.cpp",
+			"MU",
+			null
+		],
+		[
+			"/home/luisp/.config/minerva_shell/plugin/src/Caelestia/Services/cpu.cpp",
+			"MU",
+			null
+		],
+		[
+			"/home/luisp/.config/minerva_shell/plugin/src/Caelestia/Services/diskinfo.cpp",
+			"MU",
+			null
+		],
+		[
+			"/home/luisp/.config/minerva_shell/plugin/src/Caelestia/Services/gpu.cpp",
+			"MU",
+			null
+		],
+		[
+			"/home/luisp/.config/minerva_shell/plugin/src/Caelestia/Services/lyriccandidate.cpp",
+			"MU",
+			null
+		],
+		[
+			"/home/luisp/.config/minerva_shell/plugin/src/Caelestia/Services/lyrics.cpp",
+			"MU",
+			null
+		],
+		[
+			"/home/luisp/.config/minerva_shell/plugin/src/Caelestia/Services/memory.cpp",
+			"MU",
+			null
+		],
+		[
+			"/home/luisp/.config/minerva_shell/plugin/src/Caelestia/Services/sensorslib.cpp",
+			"MU",
+			null
+		],
+		[
+			"/home/luisp/.config/minerva_shell/plugin/src/Caelestia/Services/service.cpp",
+			"MU",
+			null
+		],
+		[
+			"/home/luisp/.config/minerva_shell/plugin/src/Caelestia/Services/serviceref.cpp",
+			"MU",
+			null
+		],
+		[
+			"/home/luisp/.config/minerva_shell/plugin/src/Caelestia/Services/storage.cpp",
+			"MU",
+			null
+		],
+		[
+			"/home/luisp/.config/minerva_shell/plugin/src/Caelestia/Services/tickingservice.cpp",
+			"MU",
+			null
+		],
+		[
+			"/home/luisp/.config/minerva_shell/plugin/src/Caelestia/Services/usagefmt.cpp",
+			"MU",
+			null
+		]
+	],
+	"UIC_OPTIONS" : [],
+	"UIC_SEARCH_PATHS" : [],
+	"UIC_SKIP" : 
+	[
+		"/home/luisp/.config/minerva_shell/plugin/src/Caelestia/Services/.qt/rcc/qrc_qmake_Caelestia_Services.cpp",
+		"/home/luisp/.config/minerva_shell/plugin/src/Caelestia/Services/caelestia-services_qmltyperegistrations.cpp"
+	],
+	"UIC_UI_FILES" : [],
+	"USE_BETTER_GRAPH" : true,
+	"VERBOSITY" : 0
+}

@@ -1,0 +1,7 @@
+<RCC>
+  <qresource prefix="/">
+    <file alias="shaders/blob.frag.qsb">/home/luisp/.config/minerva_shell/plugin/src/Caelestia/Blobs/.qsb/shaders/blob.frag.qsb</file>
+    <file alias="shaders/blob.vert.qsb">/home/luisp/.config/minerva_shell/plugin/src/Caelestia/Blobs/.qsb/shaders/blob.vert.qsb</file>
+  </qresource>
+</RCC>
+

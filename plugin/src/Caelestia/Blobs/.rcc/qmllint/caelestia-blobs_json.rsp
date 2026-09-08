@@ -1,0 +1,15 @@
+--bare
+-I
+/home/luisp/.config/minerva_shell/plugin/qml
+-I
+/home/luisp/.config/minerva_shell/plugin/qml/Caelestia/Blobs
+-I
+/home/luisp/.config/minerva_shell/plugin/qml
+-I
+/usr/lib/qt6/qml
+--resource
+/home/luisp/.config/minerva_shell/plugin/src/Caelestia/Blobs/.qt/rcc/qmake_Caelestia_Blobs.qrc
+--resource
+/home/luisp/.config/minerva_shell/plugin/src/Caelestia/Blobs/.qt/rcc/blob_shaders.qrc
+--json
+/home/luisp/.config/minerva_shell/plugin/caelestia-blobs_qmllint.json

@@ -1,0 +1,12 @@
+-I
+/home/luisp/.config/minerva_shell/plugin/qml
+-I
+/home/luisp/.config/minerva_shell/plugin/qml/Caelestia/Services
+-I
+/home/luisp/.config/minerva_shell/plugin/qml
+-I
+/usr/lib/qt6/qml
+--resource
+/home/luisp/.config/minerva_shell/plugin/src/Caelestia/Services/.qt/rcc/qmake_Caelestia_Services.qrc
+--module
+Caelestia.Services

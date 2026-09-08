@@ -1,0 +1,6 @@
+<RCC>
+  <qresource prefix="/qt/qml/Caelestia/Images">
+    <file alias="qmldir">/home/luisp/.config/minerva_shell/plugin/qml/Caelestia/Images/qmldir</file>
+  </qresource>
+</RCC>
+

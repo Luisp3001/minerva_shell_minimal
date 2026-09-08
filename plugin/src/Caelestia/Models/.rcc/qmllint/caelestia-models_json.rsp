@@ -1,0 +1,13 @@
+--bare
+-I
+/home/luisp/.config/minerva_shell/plugin/qml
+-I
+/home/luisp/.config/minerva_shell/plugin/qml/Caelestia/Models
+-I
+/home/luisp/.config/minerva_shell/plugin/qml
+-I
+/usr/lib/qt6/qml
+--resource
+/home/luisp/.config/minerva_shell/plugin/src/Caelestia/Models/.qt/rcc/qmake_Caelestia_Models.qrc
+--json
+/home/luisp/.config/minerva_shell/plugin/caelestia-models_qmllint.json

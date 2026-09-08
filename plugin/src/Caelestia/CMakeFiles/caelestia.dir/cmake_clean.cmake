@@ -1,0 +1,40 @@
+file(REMOVE_RECURSE
+  "../../qml/Caelestia/caelestia.qmltypes"
+  ".qt/rcc/qrc_qmake_Caelestia.cpp"
+  "CMakeFiles/caelestia.dir/link.d"
+  "CMakeFiles/caelestia_autogen.dir/AutogenUsed.txt"
+  "CMakeFiles/caelestia_autogen.dir/ParseCache.txt"
+  "caelestia_autogen"
+  "CMakeFiles/caelestia.dir/.qt/rcc/qrc_qmake_Caelestia.cpp.o"
+  "CMakeFiles/caelestia.dir/.qt/rcc/qrc_qmake_Caelestia.cpp.o.d"
+  "CMakeFiles/caelestia.dir/appdb.cpp.o"
+  "CMakeFiles/caelestia.dir/appdb.cpp.o.d"
+  "CMakeFiles/caelestia.dir/caelestia_autogen/mocs_compilation.cpp.o"
+  "CMakeFiles/caelestia.dir/caelestia_autogen/mocs_compilation.cpp.o.d"
+  "CMakeFiles/caelestia.dir/caelestia_qmltyperegistrations.cpp.o"
+  "CMakeFiles/caelestia.dir/caelestia_qmltyperegistrations.cpp.o.d"
+  "CMakeFiles/caelestia.dir/cmake_pch.hxx.gch"
+  "CMakeFiles/caelestia.dir/cmake_pch.hxx.gch.d"
+  "CMakeFiles/caelestia.dir/cutils.cpp.o"
+  "CMakeFiles/caelestia.dir/cutils.cpp.o.d"
+  "CMakeFiles/caelestia.dir/imageanalyser.cpp.o"
+  "CMakeFiles/caelestia.dir/imageanalyser.cpp.o.d"
+  "CMakeFiles/caelestia.dir/qalculator.cpp.o"
+  "CMakeFiles/caelestia.dir/qalculator.cpp.o.d"
+  "CMakeFiles/caelestia.dir/requests.cpp.o"
+  "CMakeFiles/caelestia.dir/requests.cpp.o.d"
+  "CMakeFiles/caelestia.dir/toaster.cpp.o"
+  "CMakeFiles/caelestia.dir/toaster.cpp.o.d"
+  "caelestia_qmltyperegistrations.cpp"
+  "libcaelestia.pdb"
+  "libcaelestia.so"
+  "meta_types/caelestia_json_file_list.txt"
+  "meta_types/caelestia_json_file_list.txt.timestamp"
+  "meta_types/qt6caelestia_metatypes.json"
+  "meta_types/qt6caelestia_metatypes.json.gen"
+)
+
+# Per-language clean rules from dependency scanning.
+foreach(lang CXX)
+  include(CMakeFiles/caelestia.dir/cmake_clean_${lang}.cmake OPTIONAL)
+endforeach()

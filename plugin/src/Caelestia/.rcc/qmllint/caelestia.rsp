@@ -1,0 +1,11 @@
+--bare
+-I
+/home/luisp/.config/minerva_shell/plugin/qml
+-I
+/home/luisp/.config/minerva_shell/plugin/qml/Caelestia
+-I
+/home/luisp/.config/minerva_shell/plugin/qml
+-I
+/usr/lib/qt6/qml
+--resource
+/home/luisp/.config/minerva_shell/plugin/src/Caelestia/.qt/rcc/qmake_Caelestia.qrc
