@@ -808,15 +808,28 @@ Item {
                                 }
 
                                 Rectangle {
-                                    width: _cardCol.width; height: _cmdLineTxt.implicitHeight + 12
-                                    radius: 8; color: Qt.rgba(0, 0, 0, 0.35)
-                                    TextEdit {
-                                        id: _cmdLineTxt
-                                        anchors { left: parent.left; right: parent.right; verticalCenter: parent.verticalCenter; margins: 10 }
-                                        text: "$ " + (model.role === "result" ? model.command : model.content)
-                                        font.family: Theme.fontMono; font.pixelSize: 12
-                                        color: (model.needsSudo || model.needsConfirm) ? Theme.warning : Theme.accent
-                                        wrapMode: TextEdit.Wrap; readOnly: true; selectByMouse: true
+                                    width: _cardCol.width
+                                    height: Math.min(_cmdLineTxt.implicitHeight + 16, 240)
+                                    radius: 8
+                                    color: Qt.rgba(0, 0, 0, 0.35)
+                                    clip: true
+
+                                    Flickable {
+                                        anchors.fill: parent
+                                        anchors.margins: 8
+                                        contentWidth: width
+                                        contentHeight: _cmdLineTxt.implicitHeight
+                                        clip: true
+                                        boundsBehavior: Flickable.StopAtBounds
+
+                                        TextEdit {
+                                            id: _cmdLineTxt
+                                            width: parent.width
+                                            text: "$ " + (model.role === "result" ? model.command : model.content)
+                                            font.family: Theme.fontMono; font.pixelSize: 12
+                                            color: (model.needsSudo || model.needsConfirm) ? Theme.warning : Theme.accent
+                                            wrapMode: TextEdit.Wrap; readOnly: true; selectByMouse: true
+                                        }
                                     }
                                 }
 
