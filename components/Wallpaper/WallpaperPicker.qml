@@ -244,19 +244,22 @@ Item {
 
             Text { 
                 id: wallpaperLabel
-                anchors.verticalCenter: parent.verticalCenter
+                Layout.alignment: Qt.AlignLeft
                 text: "Wallpapers"
                 color: root.clrText
-                anchors.left: parent.left
-                anchors.rightMargin: 10
                 font.family: root.fontSans
                 font.pixelSize: 15
                 font.weight: Font.DemiBold
             }
 
+            // Espaciador izquierdo para centrar el campo de búsqueda
+            Item {
+                Layout.fillWidth: true
+            }
+
             // Campo de búsqueda integrado
             Rectangle {
-                anchors.centerIn: parent
+                Layout.alignment: Qt.AlignHCenter
                 Layout.preferredWidth: 260
                 Layout.preferredHeight: 32
                 Layout.minimumHeight: 32

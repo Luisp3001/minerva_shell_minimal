@@ -4,6 +4,8 @@ import QtQuick.Effects
 import Quickshell
 import Quickshell.Io
 import Quickshell.Services.Mpris
+import Quickshell.Services.UPower
+import Quickshell.Services.Pipewire
 
 Item {
     id: root
@@ -21,12 +23,57 @@ Item {
     readonly property string fontSans: "SF Pro, Noto Sans, Inter, sans-serif"
     readonly property string fontIcon: "Symbols Nerd Font, Iosevka Nerd Font"
 
+    PwObjectTracker {
+        objects: Pipewire.defaultAudioSink ? [ Pipewire.defaultAudioSink ] : []
+    }
+
     property real brightness: 50
-    property real volume: 0
-    property bool audioMuted: false
-    property int battery: -1
     property real pendingBrightness: brightness
-    property real pendingVolume: volume
+
+    readonly property var audioSink: Pipewire.defaultAudioSink
+    readonly property real volume: audioSink && audioSink.audio ? Math.round(audioSink.audio.volume * 100) : 0
+    readonly property bool audioMuted: audioSink && audioSink.audio ? audioSink.audio.muted : false
+
+    function toggleMute() {
+        if (audioSink && audioSink.audio) {
+            audioSink.audio.muted = !audioSink.audio.muted
+        }
+    }
+
+    function setVolume(pct) {
+        if (audioSink && audioSink.audio) {
+            audioSink.audio.volume = Math.max(0, Math.min(1.0, pct / 100))
+            if (audioSink.audio.muted && pct > 0) {
+                audioSink.audio.muted = false
+            }
+        }
+    }
+
+    readonly property real batteryPct: UPower.displayDevice && UPower.displayDevice.isPresent ? Math.round(UPower.displayDevice.percentage * 100) : -1
+    readonly property bool isCharging: UPower.displayDevice && (UPower.displayDevice.state === UPowerDeviceState.Charging || UPower.displayDevice.state === UPowerDeviceState.PendingCharge)
+    readonly property bool hasBattery: UPower.displayDevice && UPower.displayDevice.isPresent
+
+    function batteryIcon(pct, charging) {
+        if (charging) return "󰂄"
+        if (pct < 0) return "󰂑"
+        if (pct <= 10) return "󰂃"
+        if (pct <= 20) return "󰁺"
+        if (pct <= 30) return "󰁻"
+        if (pct <= 40) return "󰁼"
+        if (pct <= 50) return "󰁽"
+        if (pct <= 60) return "󰁾"
+        if (pct <= 70) return "󰁿"
+        if (pct <= 80) return "󰂀"
+        if (pct <= 90) return "󰂁"
+        return "󰁹"
+    }
+
+    function batteryColor(pct, charging) {
+        if (charging) return "#a6e3a1"
+        if (pct <= 20) return "#f38ba8"
+        if (pct <= 40) return "#fab387"
+        return root.foreground
+    }
 
     readonly property var players: Mpris.players.values
     readonly property var player: {
@@ -72,11 +119,8 @@ Item {
     Process {
         id: systemState
         command: ["bash", "-lc", `
-            volume=$(pactl get-sink-volume @DEFAULT_SINK@ 2>/dev/null | grep -Po '\\d+(?=%)' | head -n1)
-            muted=$(pactl get-sink-mute @DEFAULT_SINK@ 2>/dev/null | awk '{print $2}')
             brightness=$(brightnessctl -m 2>/dev/null | cut -d, -f4 | tr -d '% ')
-            battery=$(upower -i /org/freedesktop/UPower/devices/battery_BAT0 2>/dev/null | awk '/percentage:/ {gsub("%", "", $2); print $2; exit}')
-            printf 'VOLUME|%s\nMUTED|%s\nBRIGHTNESS|%s\nBATTERY|%s\n' "$volume" "$muted" "$brightness" "$battery"
+            printf 'BRIGHTNESS|%s\n' "$brightness"
         `]
         stdout: StdioCollector {
             onStreamFinished: {
@@ -84,10 +128,7 @@ Item {
                 for (let index = 0; index < lines.length; ++index) {
                     const fields = lines[index].split("|")
                     const value = Number(fields[1])
-                    if (fields[0] === "VOLUME" && isFinite(value)) root.volume = value
-                    else if (fields[0] === "MUTED") root.audioMuted = fields[1] === "yes"
-                    else if (fields[0] === "BRIGHTNESS" && isFinite(value)) root.brightness = value
-                    else if (fields[0] === "BATTERY" && isFinite(value)) root.battery = value
+                    if (fields[0] === "BRIGHTNESS" && isFinite(value)) root.brightness = value
                 }
             }
         }
@@ -98,11 +139,6 @@ Item {
         id: brightnessDebounce
         interval: 70
         onTriggered: Quickshell.execDetached(["brightnessctl", "set", Math.round(root.pendingBrightness) + "%"])
-    }
-    Timer {
-        id: volumeDebounce
-        interval: 70
-        onTriggered: Quickshell.execDetached(["pactl", "set-sink-volume", "@DEFAULT_SINK@", Math.round(root.pendingVolume) + "%"])
     }
 
     Item {
@@ -254,10 +290,9 @@ Item {
                             Layout.fillWidth: true
                             Layout.fillHeight: true
                             CircleAction {
-                                anchors.left: parent.left
-                                anchors.verticalCenter: parent.verticalCenter
-                                width: 58
-                                height: 58
+                                anchors.centerIn: parent
+                                width: 48
+                                height: 48
                                 icon: "󰤄"
                                 onClicked: Quickshell.execDetached(["systemctl", "suspend"])
                             }
@@ -268,13 +303,31 @@ Item {
                             Layout.fillHeight: true
                             CircleAction {
                                 anchors.centerIn: parent
-                                width: 58
-                                height: 58
+                                width: 48
+                                height: 48
                                 icon: root.audioMuted ? "󰝟" : "󰕾"
                                 activeState: root.audioMuted
+                                onClicked: root.toggleMute()
+                            }
+                        }
+
+                        Item {
+                            Layout.fillWidth: true
+                            Layout.fillHeight: true
+                            CircleAction {
+                                anchors.centerIn: parent
+                                width: 48
+                                height: 48
+                                icon: root.batteryIcon(root.batteryPct, root.isCharging)
+                                iconColor: root.batteryColor(root.batteryPct, root.isCharging)
+                                activeState: root.isCharging
+                                activeColor: "#a6e3a1"
+                                hoverLabel: root.batteryPct >= 0 ? (root.batteryPct + "%") : ""
                                 onClicked: {
-                                    root.audioMuted = !root.audioMuted
-                                    Quickshell.execDetached(["pactl", "set-sink-mute", "@DEFAULT_SINK@", "toggle"])
+                                    if (root.shellRoot) {
+                                        root.close()
+                                        root.shellRoot.openPowerMenu()
+                                    }
                                 }
                             }
                         }
@@ -283,10 +336,9 @@ Item {
                             Layout.fillWidth: true
                             Layout.fillHeight: true
                             CircleAction {
-                                anchors.right: parent.right
-                                anchors.verticalCenter: parent.verticalCenter
-                                width: 58
-                                height: 58
+                                anchors.centerIn: parent
+                                width: 48
+                                height: 48
                                 icon: "󰌾"
                                 onClicked: root.lockScreen()
                             }
@@ -316,11 +368,7 @@ Item {
                 icon: root.audioMuted || root.volume <= 0 ? "󰝟" : "󰕾"
                 level: root.audioMuted ? 0 : root.volume
                 onLevelEdited: (value, committed) => {
-                    root.volume = value
-                    root.audioMuted = false
-                    root.pendingVolume = value
-                    if (committed) Quickshell.execDetached(["pactl", "set-sink-volume", "@DEFAULT_SINK@", Math.round(value) + "%"])
-                    else volumeDebounce.restart()
+                    root.setVolume(value)
                 }
             }
 
@@ -438,14 +486,26 @@ Item {
     component CircleAction: Rectangle {
         id: action
         property string icon: ""
+        property string hoverLabel: ""
         property bool activeState: false
+        property color activeColor: root.accent
+        property color iconColor: activeState ? activeColor : root.foreground
         signal clicked()
 
         radius: height / 2
-        color: activeState ? "#284345" : (actionMouse.containsMouse ? "#282629" : root.card)
-        scale: actionMouse.pressed ? 0.94 : 1
+        color: activeState ? Qt.rgba(activeColor.r, activeColor.g, activeColor.b, 0.18) : (actionMouse.containsMouse ? "#282629" : root.card)
+        scale: actionMouse.pressed ? 0.94 : (actionMouse.containsMouse ? 1.05 : 1)
         Behavior on scale { NumberAnimation { duration: 90 } }
-        Text { anchors.centerIn: parent; text: action.icon; color: action.activeState ? root.accent : root.foreground; font.family: root.fontIcon; font.pixelSize: 15 }
+        Behavior on color { ColorAnimation { duration: 120 } }
+
+        Text {
+            anchors.centerIn: parent
+            text: (action.hoverLabel.length > 0 && actionMouse.containsMouse) ? action.hoverLabel : action.icon
+            color: action.iconColor
+            font.family: (action.hoverLabel.length > 0 && actionMouse.containsMouse) ? root.fontSans : root.fontIcon
+            font.pixelSize: (action.hoverLabel.length > 0 && actionMouse.containsMouse) ? 12 : 16
+            font.weight: (action.hoverLabel.length > 0 && actionMouse.containsMouse) ? Font.Bold : Font.Normal
+        }
         MouseArea { id: actionMouse; anchors.fill: parent; hoverEnabled: true; cursorShape: Qt.PointingHandCursor; onClicked: action.clicked() }
     }
 

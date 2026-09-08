@@ -685,7 +685,7 @@ Item {
                             sourceSize.width: 32
                             sourceSize.height: 32
                             fillMode: Image.PreserveAspectFit
-                            asynchronous: true
+                            asynchronous: false
                             smooth: true
                             visible: status === Image.Ready
                         }
@@ -699,7 +699,7 @@ Item {
                             sourceSize.width: 32
                             sourceSize.height: 32
                             fillMode: Image.PreserveAspectFit
-                            asynchronous: true
+                            asynchronous: false
                             smooth: true
                             visible: status === Image.Ready
                         }

@@ -1,6 +1,7 @@
 import QtQuick
 import QtQuick.Layouts
 import QtQuick.Effects
+import Quickshell.Services.UPower
 import "Wallpaper"
 import "../Minerva" as Minerva
 
@@ -11,6 +12,7 @@ import "../Minerva" as Minerva
 // 3. Launcher abierto: Búsqueda y lista de apps con rebote orgánico (~520xAlto).
 // 4. Centro de control: panel de sistema navegable, accesible solo mediante IPC.
 // 5. Minerva: chat agentivo y visualización de voz.
+// 6. Alerta transitoria de batería: animación fluida al conectar/desconectar cargador.
 // ─────────────────────────────────────────────────────────────────────────────
 Item {
     id: root
@@ -38,6 +40,72 @@ Item {
         minervaService.isThinking || minervaService.isSpeaking ||
         minervaService.showPendingOrb)
 
+    // ── Notificación transitoria de batería (Dynamic Island) ──────────────
+    property bool batteryToastVisible: false
+    property string batteryToastText: ""
+    property string batteryToastIcon: "󰂄"
+    property color batteryToastColor: "#a6e3a1"
+    readonly property bool batteryToastOpen: batteryToastVisible && !launcherOpen && !controlCenterOpen && !minervaOpen && !wallpaperOpen && !powerMenuOpen && !notificationOpen && !minervaBusy
+
+    property int lastBatteryState: -1
+    property real lastBatteryPct: -1
+    property bool batteryInitialized: false
+
+    Connections {
+        target: UPower.displayDevice
+        function onStateChanged() {
+            if (!UPower.displayDevice || !UPower.displayDevice.isPresent) return
+            const currentState = UPower.displayDevice.state
+            const pct = Math.round(UPower.displayDevice.percentage * 100)
+            
+            if (!root.batteryInitialized) {
+                root.lastBatteryState = currentState
+                root.lastBatteryPct = pct
+                root.batteryInitialized = true
+                return
+            }
+
+            if (currentState !== root.lastBatteryState) {
+                if (currentState === UPowerDeviceState.Charging || currentState === UPowerDeviceState.PendingCharge) {
+                    root.triggerBatteryToast("󰂄", "Cargando • " + pct + "%", "#a6e3a1")
+                } else if (root.lastBatteryState === UPowerDeviceState.Charging || root.lastBatteryState === UPowerDeviceState.PendingCharge) {
+                    root.triggerBatteryToast("󰁹", "Desconectado • " + pct + "%", "#fab387")
+                }
+                root.lastBatteryState = currentState
+            }
+        }
+
+        function onPercentageChanged() {
+            if (!UPower.displayDevice || !UPower.displayDevice.isPresent) return
+            const pct = Math.round(UPower.displayDevice.percentage * 100)
+            const isDischarging = UPower.displayDevice.state === UPowerDeviceState.Discharging
+            
+            if (root.batteryInitialized && isDischarging) {
+                if (pct <= 20 && root.lastBatteryPct > 20) {
+                    root.triggerBatteryToast("󰂃", "Batería baja • " + pct + "%", "#f38ba8")
+                } else if (pct <= 10 && root.lastBatteryPct > 10) {
+                    root.triggerBatteryToast("󰂃", "Batería muy baja • " + pct + "%", "#f38ba8")
+                }
+            }
+            root.lastBatteryPct = pct
+        }
+    }
+
+    function triggerBatteryToast(icon, text, color) {
+        root.batteryToastIcon = icon
+        root.batteryToastText = text
+        root.batteryToastColor = color
+        root.batteryToastVisible = true
+        batteryToastTimer.restart()
+    }
+
+    Timer {
+        id: batteryToastTimer
+        interval: 3500
+        repeat: false
+        onTriggered: root.batteryToastVisible = false
+    }
+
     // Referencia al launcher embebido
     property alias launcherRef: launcher
 
@@ -51,9 +119,10 @@ Item {
     readonly property int powerMenuWidth: 436
     readonly property int powerMenuHeight: 88
     readonly property int minervaOrbIslandWidth: 210
+    readonly property int batteryToastIslandWidth: 210
     readonly property bool minervaSettingsOpen: minervaPanelLoader.item ? minervaPanelLoader.item.settingsOpen : false
     readonly property int minervaSettingsHeight: minervaPanelLoader.item ? minervaPanelLoader.item.settingsImplicitHeight : minervaHeight
-    width: powerMenuOpen ? powerMenuWidth : (minervaOpen ? minervaWidth : (wallpaperOpen ? wallpaperWidth : (controlCenterOpen ? controlCenterWidth : (launcherOpen ? launcherWidth : (notificationOpen ? 430 : (isExpanded ? 530 : (minervaBusy ? minervaOrbIslandWidth : 140)))))))
+    width: powerMenuOpen ? powerMenuWidth : (minervaOpen ? minervaWidth : (wallpaperOpen ? wallpaperWidth : (controlCenterOpen ? controlCenterWidth : (launcherOpen ? launcherWidth : (notificationOpen ? 430 : (isExpanded ? 530 : (minervaBusy ? minervaOrbIslandWidth : (batteryToastOpen ? batteryToastIslandWidth : 140))))))))
     height: powerMenuOpen ? powerMenuHeight : (minervaOpen ? (minervaSettingsOpen ? Math.min(minervaHeight, minervaSettingsHeight) : minervaHeight) : (wallpaperOpen ? wallpaperHeight : (controlCenterOpen ? controlCenter.contentHeight : (launcherOpen ? launcher.contentHeight : (notificationOpen ? 92 : (isExpanded ? 110 : 38))))))
     property real radius: (powerMenuOpen || launcherOpen || controlCenterOpen || minervaOpen || notificationOpen || wallpaperOpen) ? 26 : (isExpanded ? 26 : (height / 2))
 
@@ -63,9 +132,9 @@ Item {
     // Animación de expansión con rebote dinámico (Apple Dynamic Island style)
     Behavior on width {
         NumberAnimation {
-            duration: (root.powerMenuOpen || root.launcherOpen || root.minervaOpen || root.wallpaperOpen || root.isExpanded || root.notificationOpen || root.minervaBusy) ? 380 : 250
-            easing.type: (root.powerMenuOpen || root.launcherOpen || root.minervaOpen || root.wallpaperOpen || root.isExpanded || root.notificationOpen || root.minervaBusy) ? Easing.OutBack : Easing.OutCubic
-            easing.overshoot: (root.powerMenuOpen || root.launcherOpen || root.minervaOpen || root.wallpaperOpen || root.isExpanded || root.notificationOpen || root.minervaBusy) ? 1.15 : 0.0
+            duration: (root.powerMenuOpen || root.launcherOpen || root.minervaOpen || root.wallpaperOpen || root.isExpanded || root.notificationOpen || root.minervaBusy || root.batteryToastOpen) ? 380 : 250
+            easing.type: (root.powerMenuOpen || root.launcherOpen || root.minervaOpen || root.wallpaperOpen || root.isExpanded || root.notificationOpen || root.minervaBusy || root.batteryToastOpen) ? Easing.OutBack : Easing.OutCubic
+            easing.overshoot: (root.powerMenuOpen || root.launcherOpen || root.minervaOpen || root.wallpaperOpen || root.isExpanded || root.notificationOpen || root.minervaBusy || root.batteryToastOpen) ? 1.15 : 0.0
         }
     }
 
@@ -292,7 +361,7 @@ Item {
         islandWidth: root.width
         islandHeight: root.height
         rightMargin: 24
-        opacity: (root.powerMenuOpen || root.launcherOpen || root.controlCenterOpen || root.minervaOpen || root.notificationOpen || root.wallpaperOpen || (root.minervaBusy && !root.isExpanded)) ? 0 : 1
+        opacity: (root.powerMenuOpen || root.launcherOpen || root.controlCenterOpen || root.minervaOpen || root.notificationOpen || root.wallpaperOpen || (root.minervaBusy && !root.isExpanded) || root.batteryToastOpen) ? 0 : 1
         visible: opacity > 0
 
         Behavior on opacity {
@@ -442,7 +511,44 @@ Item {
         }
     }
 
-    // ── 8. DETECCIÓN DE HOVER SIN CONSUMIR CLICKS (HoverHandler) ─────────────
+    // ── 8. AVISO TRANSITORIO DE BATERÍA (Dynamic Island Toast) ─────────
+    Item {
+        id: batteryToastItem
+        anchors.centerIn: parent
+        width: parent.width
+        height: parent.height
+        opacity: root.batteryToastOpen ? 1 : 0
+        visible: opacity > 0
+        z: 22
+
+        Behavior on opacity {
+            NumberAnimation { duration: 160; easing.type: Easing.OutCubic }
+        }
+
+        RowLayout {
+            anchors.centerIn: parent
+            spacing: 8
+
+            Text {
+                text: root.batteryToastIcon
+                color: root.batteryToastColor
+                font.family: "Symbols Nerd Font, Iosevka Nerd Font"
+                font.pixelSize: 16
+                Layout.alignment: Qt.AlignVCenter
+            }
+
+            Text {
+                text: root.batteryToastText
+                color: "#FFFFFF"
+                font.family: "SF Pro Display, SF Pro, sans-serif"
+                font.pixelSize: 13
+                font.weight: Font.DemiBold
+                Layout.alignment: Qt.AlignVCenter
+            }
+        }
+    }
+
+    // ── 9. DETECCIÓN DE HOVER SIN CONSUMIR CLICKS (HoverHandler) ─────────────
     HoverHandler {
         id: islandHover
         enabled: !root.launcherOpen && !root.controlCenterOpen && !root.minervaOpen && !root.notificationOpen && !root.wallpaperOpen && !root.powerMenuOpen

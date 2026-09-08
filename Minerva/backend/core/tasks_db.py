@@ -402,3 +402,157 @@ def renew_recurring_tasks(*, report_error: bool = True) -> bool:
         return False
     finally:
         conn.close()
+
+
+def get_task_by_id(task_id: int, *, report_error: bool = True) -> dict | None:
+    """Devuelve los detalles de una tarea específica por su ID."""
+    conn = get_connection(report_error=report_error)
+    if not conn:
+        return None
+
+    task = None
+    try:
+        with conn:
+            with conn.cursor(cursor_factory=RealDictCursor) as cursor:
+                cursor.execute("""
+                    SELECT id, description, status, due_date, recurrence,
+                           recurrence_day, recurrence_month
+                    FROM minerva_tasks
+                    WHERE id = %s;
+                """, (task_id,))
+                task = cursor.fetchone()
+    except Exception as e:
+        if report_error:
+            emit_error(
+                f"No se pudo consultar la tarea #{task_id}: "
+                f"{type(e).__name__}"
+            )
+    finally:
+        conn.close()
+    return task
+
+
+def delete_task(task_id: int) -> bool:
+    """
+    Elimina permanentemente una tarea por su ID.
+    Solo debe llamarse tras confirmación explícita del usuario.
+    """
+    conn = get_connection()
+    if not conn:
+        return False
+
+    try:
+        with conn:
+            with conn.cursor() as cursor:
+                cursor.execute("""
+                    DELETE FROM minerva_tasks
+                    WHERE id = %s;
+                """, (task_id,))
+                deleted = cursor.rowcount
+        return deleted == 1
+    except Exception as exc:
+        emit_error(f"Error eliminando tarea #{task_id}: {type(exc).__name__}")
+        return False
+    finally:
+        conn.close()
+
+
+def clear_completed_tasks(*, report_error: bool = True) -> int | None:
+    """
+    Elimina permanentemente las tareas completadas que NO sean recurrentes.
+
+    Las tareas periódicas (recurrence IS NOT NULL) se conservan intactas para
+    permitir su auto-renovación por parte de renew_recurring_tasks().
+
+    Retorna el número de tareas eliminadas o None en caso de error.
+    """
+    conn = get_connection(report_error=report_error)
+    if not conn:
+        return None
+
+    try:
+        with conn:
+            with conn.cursor() as cursor:
+                cursor.execute("""
+                    DELETE FROM minerva_tasks
+                    WHERE status = 'completed'
+                      AND (recurrence IS NULL OR recurrence = '');
+                """)
+                deleted_count = cursor.rowcount
+        return deleted_count
+    except Exception as exc:
+        if report_error:
+            emit_error(
+                f"Error limpiando tareas completadas: {type(exc).__name__}"
+            )
+        return None
+    finally:
+        conn.close()
+
+
+def edit_task(
+    task_id: int,
+    description: str | None = None,
+    due_date: datetime.datetime | str | None = None,
+    recurrence: str | None = None,
+    recurrence_day: int | None = None,
+    recurrence_month: int | None = None,
+    clear_due_date: bool = False,
+    clear_recurrence: bool = False,
+) -> bool:
+    """
+    Actualiza campos específicos de una tarea existente.
+    Solo modifica las columnas pasadas de forma explícita.
+    """
+    sets = []
+    params = []
+
+    if description is not None and description.strip():
+        sets.append("description = %s")
+        params.append(description.strip())
+
+    if clear_due_date:
+        sets.append("due_date = NULL")
+    elif due_date is not None:
+        sets.append("due_date = %s")
+        params.append(due_date)
+
+    if clear_recurrence:
+        sets.extend(["recurrence = NULL", "recurrence_day = NULL", "recurrence_month = NULL"])
+    else:
+        if recurrence is not None:
+            sets.append("recurrence = %s")
+            params.append(recurrence)
+        if recurrence_day is not None:
+            sets.append("recurrence_day = %s")
+            params.append(recurrence_day)
+        if recurrence_month is not None:
+            sets.append("recurrence_month = %s")
+            params.append(recurrence_month)
+
+    if not sets:
+        return False
+
+    params.append(task_id)
+
+    conn = get_connection()
+    if not conn:
+        return False
+
+    try:
+        with conn:
+            with conn.cursor() as cursor:
+                query = f"""
+                    UPDATE minerva_tasks
+                    SET {", ".join(sets)}
+                    WHERE id = %s;
+                """
+                cursor.execute(query, tuple(params))
+                updated = cursor.rowcount
+        return updated == 1
+    except Exception as exc:
+        emit_error(f"Error editando tarea #{task_id}: {type(exc).__name__}")
+        return False
+    finally:
+        conn.close()
+

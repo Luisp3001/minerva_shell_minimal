@@ -36,7 +36,7 @@ Item {
                     source: root.notification ? root.notification.image : ""
                     visible: status === Image.Ready
                     fillMode: Image.PreserveAspectCrop
-                    asynchronous: true
+                    asynchronous: false
                 }
 
                 Text {

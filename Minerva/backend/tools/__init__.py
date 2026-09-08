@@ -318,6 +318,7 @@ def _manage_tasks(args: dict, _context: ToolContext):
         recurrence=args.get("recurrence"),
         recurrence_day=args.get("recurrence_day"),
         recurrence_month=args.get("recurrence_month"),
+        confirm=args.get("confirm", False),
     )
 
 

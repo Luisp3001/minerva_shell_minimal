@@ -146,9 +146,10 @@ Minerva/
         ├── spotify.py           # spotify_music: OAuth2 completo, control de reproducción
         ├── screen.py            # capture_screen: grim → base64 → visión multimodal
         ├── memory_tool.py       # update_memory: modifica secciones en user_profile.md y preferences.md
-        └── tasks.py             # manage_tasks: Gestiona tareas en PostgreSQL (add, complete, list)
+        └── tasks.py             # manage_tasks: Gestiona tareas en PostgreSQL (add, complete, list, edit, delete, clear_completed)
                                  #   - Soporte de recurrence ('daily','weekly','monthly','yearly'),
-                                 #     recurrence_day y recurrence_month
+                                 #     recurrence_day, recurrence_month, confirmación previa de borrado
+                                 #     y protección contra borrado accidental de tareas recurrentes
 ```
 
 ---
@@ -278,7 +279,7 @@ Durante la reproducción de cualquier motor, un `AudioAnalyzer` calcula métrica
 | `spotify_music`   | `tools/spotify.py`     | Control de Spotify (play, pause, search, queue, volume, etc.)    |
 | `capture_screen`  | `tools/screen.py`      | Captura la pantalla con grim → base64 → visión multimodal       |
 | `update_memory`   | `tools/memory_tool.py` | Modifica quirúrgicamente `user_profile.md` o `preferences.md`    |
-| `manage_tasks`    | `tools/tasks.py`       | Gestiona tareas en PostgreSQL (`add`, `complete`, `list`) con soporte de recurrencia (`recurrence`, `recurrence_day`, `recurrence_month`) |
+| `manage_tasks`    | `tools/tasks.py`       | Gestiona tareas en PostgreSQL (`add`, `complete`, `list`, `edit`, `delete`, `clear_completed`) con protección de recurrencia y confirmación de borrado |
 
 ---
 
@@ -287,9 +288,9 @@ Durante la reproducción de cualquier motor, un `AudioAnalyzer` calcula métrica
 Minerva puede gestionar tus pendientes usando una base de datos PostgreSQL remota o local (configurada en `~/.config/minerva/.env`). Esto le permite funcionar como un asistente proactivo real:
 
 1. **Inyección de Contexto**: Al chatear, Minerva lee tus tareas pendientes y las inyecta en su `SYSTEM_PROMPT` para conocerlas y recordártelas de forma natural.
-2. **Worker en Segundo Plano**: Un hilo en `main.py` sondea la BD cada 10 minutos. Antes de consultar pendientes, llama a `renew_recurring_tasks()` para renovar automáticamente cualquier tarea recurrente vencida.
+2. **Worker en Segundo Plano**: Un hilo en `main.py` sondea la BD cada 10 minutos. Antes de consultar pendientes, llama a `renew_recurring_tasks()` para renovar automáticamente cualquier tarea recurrente vencida. Además, ejecuta periódicamente `clear_completed_tasks()` para depurar tareas completadas no recurrentes del historial sin riesgo.
 3. **Indicador Visual Silencioso**: QML captura el evento y muestra el SiriOrb en el centro de tu pantalla por 20 segundos y deja un aviso en el widget. El orbe reacciona visualmente según el nivel de urgencia máximo con tinte de color en GPU y una animación de respiración/pulso: **Verde esmeralda** (baja urgencia, > 3 días), **Amarillo/Ámbar** (media urgencia, 1 a 3 días) o **Rojo vibrante parpadeante** (alta urgencia / vencida, < 24 horas).
-4. **Herramienta IA**: Minerva tiene la tool `manage_tasks` para añadir nuevas tareas, ponerles fecha de vencimiento (`due_date`) o marcarlas como completadas. `manage_tasks` está **siempre disponible** en el Tool RAG para garantizar que la IA la use ante cualquier pregunta sobre fechas o cobros.
+4. **Herramienta IA**: Minerva tiene la tool `manage_tasks` para añadir nuevas tareas, ponerles fecha de vencimiento (`due_date`), marcarlas como completadas, editarlas (`edit`), eliminarlas con confirmación previa del usuario (`delete`) o purgar completadas (`clear_completed`). `manage_tasks` está **siempre disponible** en el Tool RAG para garantizar que la IA la use ante cualquier pregunta sobre fechas o cobros.
 
 ### Tareas recurrentes
 

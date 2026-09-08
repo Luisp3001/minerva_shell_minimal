@@ -67,8 +67,8 @@ Item {
         if (action === "lock") {
             // Intentar bloquear sesión por loginctl o mediante Lock.qml de Minerva
             Quickshell.execDetached(["loginctl", "lock-session"])
-            Quickshell.execDetached(["qs", "-p", Quickshell.env("HOME") + "/.config/minerva_shell/components/Lock.qml"])
         } else if (action === "suspend") {
+            Quickshell.execDetached(["loginctl","lock-session"])
             Quickshell.execDetached(["systemctl", "suspend"])
         } else if (action === "logout") {
             Quickshell.execDetached(["hyprctl", "dispatch", "exit"])

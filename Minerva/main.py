@@ -5,7 +5,6 @@ QML y Python intercambian objetos JSON Lines por stdin/stdout. El coordinador
 solo valida y enruta eventos; las operaciones bloqueantes viven en pools
 acotados para que cancelar, confirmar y usar voz siga siendo inmediato.
 """
-
 from __future__ import annotations
 
 import base64
@@ -40,7 +39,12 @@ from backend.core.io import (
 )
 from backend.core.job_manager import JobSnapshot, job_mgr
 from backend.core.memory import get_memory_context
-from backend.core.tasks_db import get_pending_tasks, init_db, renew_recurring_tasks
+from backend.core.tasks_db import (
+    clear_completed_tasks,
+    get_pending_tasks,
+    init_db,
+    renew_recurring_tasks,
+)
 from backend.core.voice import VOICE_AVAILABLE, voice_mgr
 from backend.tools import FISH_AUDIO_EMOTION_PROMPT, SYSTEM_PROMPT
 
@@ -692,6 +696,7 @@ def _submit_voice_toggle() -> None:
 
 def _tasks_worker() -> None:
     initialized = False
+    cleanup_cycle = 0
     while not shutdown_event.is_set():
         try:
             if not initialized:
@@ -700,6 +705,10 @@ def _tasks_worker() -> None:
                     if shutdown_event.wait(300):
                         break
                     continue
+            cleanup_cycle += 1
+            if cleanup_cycle >= 144:
+                clear_completed_tasks(report_error=False)
+                cleanup_cycle = 0
             renew_recurring_tasks(report_error=False)
             pending = get_pending_tasks(report_error=False) or []
             now = datetime.datetime.now()

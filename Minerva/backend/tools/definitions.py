@@ -66,6 +66,9 @@ SYSTEM_PROMPT = f"""Eres Minerva, una asistente inteligente integrada en el escr
   - "add": Agregar una tarea. Requiere "description" y opcionalmente "due_date" (formato YYYY-MM-DD HH:MM:SS). Para tareas que se repiten, usa "recurrence" ('daily', 'weekly', 'monthly', 'yearly'), "recurrence_day" (ej: 11 para "el día 11 de cada mes") y "recurrence_month" (1-12, para fijar un mes específico en tareas 'yearly').
   - "complete": Marcar como completada. Requiere "task_id".
   - "list": Listar tareas pendientes con su due_date, recurrencia, day y month. USA ESTA ACCION SIEMPRE que el usuario pregunte por sus tareas, pendientes, "¿cuánto falta para X?", "¿cuándo es el próximo cobro?", "¿qué tengo pendiente?", o cualquier pregunta sobre fechas de vencimiento. NO uses run_command ni web_search para responder sobre tareas.
+  - "edit": Modificar una tarea existente. Requiere "task_id" y los campos que deseas actualizar ("description", "due_date", "recurrence", "recurrence_day", "recurrence_month"). Para quitar la fecha o recurrencia pasa 'none'.
+  - "delete": Eliminar una tarea. Requiere "task_id". REGLA DE SEGURIDAD CRÍTICA: NUNCA uses confirm=true en tu primera llamada; llama primero con confirm=false (o sin él) para obtener los detalles de la tarea, muéstraselos al usuario y pídele confirmación expresa en el chat. Solo cuando el usuario confirme explícitamente que desea borrarla, llama de nuevo con confirm=true.
+  - "clear_completed": Limpiar del historial todas las tareas completadas que no sean recurrentes. Las tareas periódicas se conservan intactas para su auto-renovación.
   - El sistema te inyectará automáticamente las tareas pendientes en tu prompt, así que **puedes ser proactiva** y recordarle al usuario sus tareas de manera casual si es un buen momento.
 - **Estado de comandos en segundo plano** (check_job_status): Consulta el estado y salida de comandos bash ejecutados con run_command. Úsala cuando:
   - El usuario pregunte "¿cómo va el comando?", "¿terminó el sleep?", "¿hay algo corriendo?", "¿qué pasó con la descarga?", o similar.
@@ -542,44 +545,48 @@ TOOL_DEFINITIONS = [
         "type": "function",
         "function": {
             "name": "manage_tasks",
-            "description": "Gestiona las tareas pendientes del usuario en PostgreSQL. Úsala como fuente de verdad para responder CUALQUIER pregunta sobre tareas, pendientes, fechas de vencimiento, cobros o recordatorios. La acción 'list' devuelve cada tarea con su descripción, due_date, recurrencia, recurrence_day y recurrence_month — úsala cuando el usuario pregunte '¿cuánto falta para X?', '¿cuándo es el próximo cobro?', '¿qué tengo pendiente?' o similar. NO uses run_command ni web_search para responder sobre tareas.",
+            "description": "Gestiona las tareas del usuario en PostgreSQL. Úsala como fuente de verdad para responder CUALQUIER pregunta sobre tareas, pendientes, fechas de vencimiento, cobros o recordatorios. Soporta añadir, completar, listar pendientes, editar, eliminar con confirmación y limpiar tareas completadas no recurrentes.",
             "parameters": {
                 "type": "object",
                 "properties": {
                     "action": {
                         "type": "string",
-                        "description": "La acción a realizar: 'add', 'complete', 'list'",
-                        "enum": ["add", "complete", "list"]
+                        "description": "La acción a realizar: 'add', 'complete', 'list', 'edit', 'delete', 'clear_completed'",
+                        "enum": ["add", "complete", "list", "edit", "delete", "clear_completed"]
                     },
                     "description": {
                         "type": "string",
-                        "description": "Descripción de la tarea a añadir (solo para action 'add')"
+                        "description": "Descripción de la tarea a añadir o nuevo texto al editar (para 'add' o 'edit')"
                     },
                     "task_id": {
                         "type": "integer",
                         "minimum": 1,
-                        "description": "ID de la tarea a completar (solo para action 'complete')"
+                        "description": "ID de la tarea a completar, editar o eliminar (para 'complete', 'edit', 'delete')"
                     },
                     "due_date": {
                         "type": "string",
-                        "description": "Fecha y hora límite de la tarea en formato YYYY-MM-DD HH:MM:SS (opcional, solo para 'add')"
+                        "description": "Fecha y hora límite de la tarea en formato YYYY-MM-DD HH:MM:SS (opcional para 'add' o 'edit'). Para quitar la fecha en 'edit' pasa 'none'."
                     },
                     "recurrence": {
                         "type": "string",
-                        "description": "Frecuencia de repetición de la tarea (solo para 'add'). Úsalo cuando el usuario mencione que algo se repite periódicamente. Valores: 'daily' (diaria), 'weekly' (semanal), 'monthly' (mensual), 'yearly' (anual).",
-                        "enum": ["daily", "weekly", "monthly", "yearly"]
+                        "description": "Frecuencia de repetición de la tarea (para 'add' o 'edit'). Valores: 'daily' (diaria), 'weekly' (semanal), 'monthly' (mensual), 'yearly' (anual). Para quitar la recurrencia al editar usa 'none'.",
+                        "enum": ["daily", "weekly", "monthly", "yearly", "none"]
                     },
                     "recurrence_day": {
                         "type": "integer",
                         "minimum": 0,
                         "maximum": 31,
-                        "description": "Día de anclaje para la recurrencia (solo para 'add'). Para 'monthly'/'yearly': día del mes (1-31), ej: 11 para 'el día 11 de cada mes'. Para 'weekly': día de la semana (0=lunes, 1=martes, ..., 6=domingo)."
+                        "description": "Día de anclaje para la recurrencia (para 'add' o 'edit'). Para 'monthly'/'yearly': día del mes (1-31). Para 'weekly': día de la semana (0=lunes, 1=martes, ..., 6=domingo)."
                     },
                     "recurrence_month": {
                         "type": "integer",
                         "minimum": 1,
                         "maximum": 12,
-                        "description": "Mes de anclaje para la recurrencia (solo para 'add' con 'yearly'). Mes del año (1-12), ej: 3 para marzo."
+                        "description": "Mes de anclaje para la recurrencia (para 'add' o 'edit' con 'yearly'). Mes del año (1-12)."
+                    },
+                    "confirm": {
+                        "type": "boolean",
+                        "description": "Confirmación explícita para eliminar una tarea (solo para 'delete'). Si es false o se omite, la herramienta devolverá los datos de la tarea para solicitar confirmación al usuario antes de borrarla definitivamente."
                     }
                 },
                 "required": ["action"]
