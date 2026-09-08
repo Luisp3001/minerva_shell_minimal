@@ -1,0 +1,13 @@
+[Unit]
+Description=Minerva Wallpaper Watcher Service (auto-generate thumbnails and watch wallpapers)
+After=graphical-session.target
+PartOf=graphical-session.target
+
+[Service]
+Type=simple
+ExecStart=%h/.config/minerva_shell/components/Wallpaper/wallpaper_watcher.sh
+Restart=on-failure
+RestartSec=3
+
+[Install]
+WantedBy=default.target
