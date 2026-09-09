@@ -1,7 +1,7 @@
 import QtQuick
 import Quickshell
 
-// ── SiriOrb — GPU ShaderEffect con análisis de audio en tiempo real ──────
+// ── Minerva_waveform — GPU ShaderEffect con análisis de audio en tiempo real ──────
 // Reemplaza el anterior Canvas (CPU/JS) con un fragment shader que ejecuta
 // Simplex Noise, 4 ondas de color con screen blend y glow gaussiano,
 // todo modulado por RMS + 4 bandas FFT del audio de Minerva.
@@ -120,7 +120,7 @@ Item {
 
     // ── GPU ShaderEffect ──────────────────────────────────────────────
     ShaderEffect {
-        id: orbShader
+        id: waveformShader
         anchors.fill: parent
         opacity: root.stateOpacity
         Behavior on opacity { NumberAnimation { duration: 450 } }
@@ -142,6 +142,6 @@ Item {
         property real u_tintB:      root.tintB
         property real u_tintAmount: root.tintAmount
 
-        fragmentShader: "shaders/siri_orb.frag.qsb"
+        fragmentShader: "shaders/waveform.frag.qsb"
     }
 }

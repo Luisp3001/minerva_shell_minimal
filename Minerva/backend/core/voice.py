@@ -653,7 +653,7 @@ class VoiceManager:
                 self.recording_limit_reached = True
                 emit({"type": "silence_detected"})
 
-            # Emitir métricas de audio del micrófono para el SiriOrb
+            # Emitir métricas de audio del micrófono para el Minerva_waveform
             metrics = self.analyzer.analyze(audio_np, 16000)
             emit({"type": "audio_data", "source": "mic", **metrics})
 

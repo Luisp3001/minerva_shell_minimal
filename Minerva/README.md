@@ -36,9 +36,9 @@ Después reinicia Quickshell. El instalador conserva un entorno local existente 
 - **Generación de imágenes:** Integración nativa con Gemini (`gemini-3.1-flash-image`) para generar imágenes a partir de descripciones de texto en resoluciones 1K (previsualizable en el chat) y 2K (guardado directo en disco en `~/Pictures/minerva`).
 - **Control de entorno de escritorio (Hyprland):** Navegación entre workspaces (1-10), reubicación de ventanas entre workspaces por clase o título y listado de ventanas activas vía `hyprctl`.
 - **Herramientas de documentos y RAG Efímero:** Creación de documentos Word (`.docx`) formateados desde Markdown con `pandoc`, edición quirúrgica de Word con `python-docx` y consulta semántica puntual (`query_document`) en PDF, DOCX y PPTX con `MarkItDown` + `ChromaDB` sin necesidad de leer todo el archivo.
-- **SiriOrb:** Visualización animada por GPU (fragment shader) que reacciona al audio en tiempo real con RMS y 4 bandas FFT.
+- **Minerva_waveform:** Visualización animada por GPU (fragment shader) que reacciona al audio en tiempo real con RMS y 4 bandas FFT.
 - **Memoria a largo plazo:** Archivos Markdown (`user_profile.md` y `preferences.md`) para almacenar el perfil del usuario y sus preferencias entre sesiones, actualizables proactivamente con `update_memory`.
-- **Proactividad (Tareas):** Conexión a PostgreSQL para gestionar tareas con alertas visuales sutiles en el SiriOrb. Soporta **tareas recurrentes** (diaria, semanal, mensual, anual con `recurrence_month`) con auto-renovación en segundo plano.
+- **Proactividad (Tareas):** Conexión a PostgreSQL para gestionar tareas con alertas visuales sutiles en el Minerva_waveform. Soporta **tareas recurrentes** (diaria, semanal, mensual, anual con `recurrence_month`) con auto-renovación en segundo plano.
 - **Herramientas de archivos avanzadas:** Lectura inteligente por rangos de líneas (`read_file`), metadatos (`file_info`), creación directa (`write_file`), edición quirúrgica (`replace_lines`) y conversión a Markdown para PDF, Word (`.docx`), PowerPoint (`.pptx`) y Excel/CSV (`.xlsx`/`.csv`).
 - **Tool RAG:** Selección inteligente de herramientas relevantes vía embedding semántico para no saturar el contexto.
 - **Seguridad:** Todos los comandos requieren confirmación; la clasificación `safe / destructive / sudo` solo ajusta la advertencia y el canal de privilegios.
@@ -69,14 +69,14 @@ Minerva/
 │                                #   - Input con micrófono, adjuntar imagen, placeholder dinámico
 ├── CommandApprovalDialog.qml    # Cola y diálogo de aprobación para todo comando shell
 ├── SettingsPanel.qml            # Selector persistente de modelo y configuración TTS
-├── SiriOrb.qml                  # Orbe animado tipo Siri (GPU ShaderEffect):
+├── Minerva_waveform.qml             # Visualizador waveform animado (GPU ShaderEffect):
 │                                #   - Estados: idle, recording, transcribing, thinking, speaking
 │                                #   - Recibe audioRms + 4 bandas FFT como uniforms
 │                                #   - Acumulador de fase continuo (~60fps) para evitar saltos
 │
 ├── shaders/
-│   ├── siri_orb.frag            # Fragment shader GLSL: Simplex Noise + 4 ondas de color
-│   └── siri_orb.frag.qsb       # Shader precompilado (Qt Shader Baker)
+│   ├── waveform.frag            # Fragment shader GLSL: Simplex Noise + 4 ondas de color
+│   └── waveform.frag.qsb       # Shader precompilado (Qt Shader Baker)
 │
 ├── voice/                       # Modelos locales de voz (creados por install.sh)
 │   ├── es_MX-claude-high.onnx   # Modelo Piper TTS (español México, calidad alta)
@@ -123,7 +123,7 @@ Minerva/
     │   ├── audio_analyzer.py    # AudioAnalyzer: RMS + FFT de 4 bandas
     │   │                        #   - Suavizado exponencial
     │   │                        #   - Ventana Hann para reducir spectral leakage
-    │   │                        #   - Alimenta los uniforms del shader SiriOrb
+    │   │                        #   - Alimenta los uniforms del shader Minerva_waveform
     │   ├── memory.py            # Lectura y actualización de archivos Markdown (user_profile.md / preferences.md)
     │   │                        #   - get_memory_context() para inyección en el system prompt
     │   │                        #   - update_memory_section() para guardado quirúrgico de secciones
@@ -250,7 +250,7 @@ Minerva tiene un pipeline de voz completo con tres subsistemas independientes:
 - **Fish Audio (API en la nube):** Síntesis neural de alta calidad con soporte de **Emotion Tags** (`[happy]`, `[sad]`, `[excited]`, `[confident]`, `[neutral]`, etc.). Un procesador en streaming (`StreamEmotionStripper`) limpia los tags en tiempo real antes de emitir los tokens a la UI, asegurando que la voz exprese entonación sin mostrar símbolos en el chat.
 - **Google Gemini TTS (API en la nube):** Síntesis neural multilingüe con la API oficial de Google (`google-genai`). Admite modelos `gemini-2.5-flash-tts` y `gemini-2.5-pro-tts` con ~30 voces preconstruidas (ej: `Kore`, `Aoede`, `Puck`, `Charon`, `Zephyr`, etc.) convertidas directamente a audio PCM 24kHz.
 
-Durante la reproducción de cualquier motor, un `AudioAnalyzer` calcula métricas (RMS + FFT) que se envían al frontend para animar el SiriOrb en sincronía con la voz.
+Durante la reproducción de cualquier motor, un `AudioAnalyzer` calcula métricas (RMS + FFT) que se envían al frontend para animar el Minerva_waveform en sincronía con la voz.
 
 ---
 
@@ -289,7 +289,7 @@ Minerva puede gestionar tus pendientes usando una base de datos PostgreSQL remot
 
 1. **Inyección de Contexto**: Al chatear, Minerva lee tus tareas pendientes y las inyecta en su `SYSTEM_PROMPT` para conocerlas y recordártelas de forma natural.
 2. **Worker en Segundo Plano**: Un hilo en `main.py` sondea la BD cada 10 minutos. Antes de consultar pendientes, llama a `renew_recurring_tasks()` para renovar automáticamente cualquier tarea recurrente vencida. Además, ejecuta periódicamente `clear_completed_tasks()` para depurar tareas completadas no recurrentes del historial sin riesgo.
-3. **Indicador Visual Silencioso**: QML captura el evento y muestra el SiriOrb en el centro de tu pantalla por 20 segundos y deja un aviso en el widget. El orbe reacciona visualmente según el nivel de urgencia máximo con tinte de color en GPU y una animación de respiración/pulso: **Verde esmeralda** (baja urgencia, > 3 días), **Amarillo/Ámbar** (media urgencia, 1 a 3 días) o **Rojo vibrante parpadeante** (alta urgencia / vencida, < 24 horas).
+3. **Indicador Visual Silencioso**: QML captura el evento y muestra el Minerva_waveform en el centro de tu pantalla por 20 segundos y deja un aviso en el widget. El orbe reacciona visualmente según el nivel de urgencia máximo con tinte de color en GPU y una animación de respiración/pulso: **Verde esmeralda** (baja urgencia, > 3 días), **Amarillo/Ámbar** (media urgencia, 1 a 3 días) o **Rojo vibrante parpadeante** (alta urgencia / vencida, < 24 horas).
 4. **Herramienta IA**: Minerva tiene la tool `manage_tasks` para añadir nuevas tareas, ponerles fecha de vencimiento (`due_date`), marcarlas como completadas, editarlas (`edit`), eliminarlas con confirmación previa del usuario (`delete`) o purgar completadas (`clear_completed`). `manage_tasks` está **siempre disponible** en el Tool RAG para garantizar que la IA la use ante cualquier pregunta sobre fechas o cobros.
 
 ### Tareas recurrentes

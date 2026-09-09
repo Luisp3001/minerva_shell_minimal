@@ -536,7 +536,7 @@ Item {
                 _updateMinervaState()
                 break
             case "audio_data":
-                // Métricas de audio en tiempo real → SiriOrb shader
+                // Métricas de audio en tiempo real → Minerva_waveform shader
                 if (widget.shellRoot) {
                     widget.shellRoot.audioRms   = msg.rms   || 0.0
                     widget.shellRoot.audioBand0 = msg.band0 || 0.0

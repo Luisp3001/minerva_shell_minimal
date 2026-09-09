@@ -74,7 +74,7 @@ Minerva (`Minerva/`) es una asistente inteligente diseñada específicamente par
   - *Wake Word:* Detección local en segundo plano con **Vosk** en español ("Minerva").
   - *STT (Transcripción):* Reconocimiento de voz local con **Whisper** (`pywhispercpp`).
   - *TTS Triple:* Síntesis de voz local con **Piper** (alta velocidad y privacidad), en la nube con **Fish Audio** (emociones dinámicas) o **Google Gemini TTS** (~30 voces neurales).
-- **SiriOrb (`SiriOrb.qml`):** Visualizador de audio acelerado por GPU (fragment shader GLSL) que reacciona a los armónicos y volumen de la voz en tiempo real con RMS y 4 bandas FFT.
+- **Minerva_waveform (`Minerva_waveform.qml`):** Visualizador de audio acelerado por GPU (fragment shader GLSL) que reacciona a los armónicos y volumen de la voz en tiempo real con RMS y 4 bandas FFT.
 - **Control del Entorno Hyprland:** Cambio y consulta de workspaces, movimiento de ventanas y análisis del estado del escritorio.
 - **Documentos y RAG:** Lectura y edición inteligente de documentos PDF, Word (`.docx`), PowerPoint (`.pptx`) y Excel (`.xlsx`), así como creación de archivos Word desde Markdown.
 - **Memoria Persistente y Tareas:** Perfil de preferencias continuo (`~/.config/minerva/memory/`) y gestión de recordatorios recurrentes.
@@ -284,8 +284,8 @@ minerva_shell/
 │   ├── ChatWidget.qml            # Interfaz de chat con streaming de tokens e imágenes
 │   ├── CommandApprovalDialog.qml # Modal seguro de aprobación de comandos
 │   ├── SettingsPanel.qml         # Ajustes de modelo, temperatura y voz
-│   ├── SiriOrb.qml               # Orbe reactivo acelerado por GPU
-│   ├── shaders/                  # Fragment shaders GLSL para el SiriOrb
+│   ├── Minerva_waveform.qml               # Orbe reactivo acelerado por GPU
+│   ├── shaders/                  # Fragment shaders GLSL para el Minerva_waveform
 │   ├── main.py                   # Coordinador Python JSON Lines
 │   ├── run-backend.sh            # Lanzador del entorno virtual de Python
 │   ├── requirements.txt          # Librerías de Python requeridas

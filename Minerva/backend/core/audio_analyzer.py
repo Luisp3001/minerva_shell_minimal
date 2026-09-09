@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-AudioAnalyzer — Análisis de audio en tiempo real para la visualización del SiriOrb.
+AudioAnalyzer — Análisis de audio en tiempo real para la visualización del Minerva_waveform.
 
 Calcula RMS (volumen) y 4 bandas de frecuencia (FFT) a partir de búferes PCM.
 Los valores se normalizan a [0.0, 1.0] para uso directo como uniforms del shader.

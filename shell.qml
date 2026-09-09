@@ -189,6 +189,24 @@ ShellRoot {
             }
         }
 
+        function showBrightnessOsd(value: real): void {
+            for (let i = 0; i < variantsModel.instances.length; i++) {
+                let inst = variantsModel.instances[i]
+                if (inst && inst.islandRef) {
+                    inst.islandRef.triggerBrightnessOsd(value)
+                }
+            }
+        }
+
+        function showVolumeOsd(): void {
+            for (let i = 0; i < variantsModel.instances.length; i++) {
+                let inst = variantsModel.instances[i]
+                if (inst && inst.islandRef) {
+                    inst.islandRef.triggerVolumeOsd(true)
+                }
+            }
+        }
+
     }
 
     // Variants crea la barra en cada monitor conectado automáticamente

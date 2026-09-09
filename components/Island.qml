@@ -1,7 +1,10 @@
 import QtQuick
 import QtQuick.Layouts
 import QtQuick.Effects
+import Quickshell
+import Quickshell.Io
 import Quickshell.Services.UPower
+import Quickshell.Services.Pipewire
 import "Wallpaper"
 import "../Minerva" as Minerva
 
@@ -13,6 +16,7 @@ import "../Minerva" as Minerva
 // 4. Centro de control: panel de sistema navegable, accesible solo mediante IPC.
 // 5. Minerva: chat agentivo y visualización de voz.
 // 6. Alerta transitoria de batería: animación fluida al conectar/desconectar cargador.
+// 7. OSD transitorio de volumen y brillo: indicador dinámico con feedback visual reactivo.
 // ─────────────────────────────────────────────────────────────────────────────
 Item {
     id: root
@@ -37,15 +41,184 @@ Item {
     }
     readonly property bool minervaBusy: minervaService && (
         minervaService.isRecording || minervaService.isTranscribing ||
-        minervaService.isThinking || minervaService.isSpeaking ||
-        minervaService.showPendingOrb)
+        minervaService.isThinking || minervaService.isSpeaking)
+
+    // ── Recordatorio Sutil y Periódico de Tarea Pendiente (Anti-Ansiedad) ─
+    readonly property bool hasMinervaPendingTasks: minervaService ? minervaService.hasPendingTasks : false
+    readonly property bool hasMinervaUrgentTasks: minervaService ? minervaService.hasUrgentTasks : false
+    readonly property string minervaTaskUrgency: minervaService ? minervaService.taskUrgency : ""
+
+    property bool taskReminderVisible: false
+
+    onHasMinervaPendingTasksChanged: {
+        if (hasMinervaPendingTasks) {
+            root.taskReminderVisible = true
+            taskReminderActiveTimer.restart()
+            taskReminderIntervalTimer.stop()
+        } else {
+            root.taskReminderVisible = false
+            taskReminderActiveTimer.stop()
+            taskReminderIntervalTimer.stop()
+        }
+    }
+
+    onMinervaTaskUrgencyChanged: {
+        if (hasMinervaPendingTasks) {
+            root.taskReminderVisible = true
+            taskReminderActiveTimer.restart()
+        }
+    }
+
+    // Temporizador: permanece visible durante 9 segundos con pulso suave
+    Timer {
+        id: taskReminderActiveTimer
+        interval: 9000
+        repeat: false
+        onTriggered: {
+            root.taskReminderVisible = false
+            if (root.hasMinervaPendingTasks) {
+                // Intervalo de descanso: 45s urgente, 90s media, 140s (~2.3 min) normal
+                const delay = (root.hasMinervaUrgentTasks || root.minervaTaskUrgency === "urgent") ? 50000
+                            : (root.minervaTaskUrgency === "medium" ? 100000 : 140000)
+                taskReminderIntervalTimer.interval = delay
+                taskReminderIntervalTimer.restart()
+            }
+        }
+    }
+
+    // Temporizador: intervalo periódico para volver a avisar brevemente
+    Timer {
+        id: taskReminderIntervalTimer
+        interval: 120000
+        repeat: false
+        onTriggered: {
+            if (root.hasMinervaPendingTasks) {
+                root.taskReminderVisible = true
+                taskReminderActiveTimer.restart()
+            }
+        }
+    }
+
+    // ── OSD Transitorio de Volumen y Brillo (Dynamic Island) ──────────────
+    property bool osdVisible: false
+    property string osdType: "volume" // "volume" | "brightness"
+    property real osdValue: 0
+    property bool osdMuted: false
+
+    readonly property bool osdOpen: osdVisible && !launcherOpen && !controlCenterOpen && !minervaOpen && !wallpaperOpen && !powerMenuOpen && !notificationOpen && !minervaBusy && !isExpanded
+    readonly property int osdIslandWidth: 200
+
+    function triggerOsd(type, value, muted) {
+        root.osdType = type
+        root.osdValue = Math.max(0, Math.min(150, value))
+        root.osdMuted = (type === "volume") ? !!muted : false
+        root.osdVisible = true
+        osdHideTimer.restart()
+    }
+
+    Timer {
+        id: osdHideTimer
+        interval: 2000
+        repeat: false
+        onTriggered: root.osdVisible = false
+    }
+
+    // ── Rastreador Pipewire para Volumen ──────────────────────────────────
+    PwObjectTracker {
+        objects: Pipewire.defaultAudioSink ? [ Pipewire.defaultAudioSink ] : []
+    }
+
+    readonly property var defaultAudioSink: Pipewire.defaultAudioSink
+    property bool audioInitialized: false
+    property real lastAudioVolume: -1
+    property bool lastAudioMuted: false
+
+    onDefaultAudioSinkChanged: {
+        if (root.defaultAudioSink && root.defaultAudioSink.audio) {
+            root.lastAudioVolume = root.defaultAudioSink.audio.volume
+            root.lastAudioMuted = root.defaultAudioSink.audio.muted
+            root.audioInitialized = true
+        }
+    }
+
+    Connections {
+        target: (root.defaultAudioSink && root.defaultAudioSink.audio) ? root.defaultAudioSink.audio : null
+        function onVolumeChanged() { root.handleAudioChange() }
+        function onMutedChanged() { root.handleAudioChange() }
+    }
+
+    function triggerVolumeOsd(force) {
+        if (!root.defaultAudioSink || !root.defaultAudioSink.audio) return
+        const vol = root.defaultAudioSink.audio.volume
+        const mut = root.defaultAudioSink.audio.muted
+
+        if (!root.audioInitialized) {
+            root.lastAudioVolume = vol
+            root.lastAudioMuted = mut
+            root.audioInitialized = true
+            if (!force) return
+        }
+
+        if (!force && Math.abs(vol - root.lastAudioVolume) < 0.001 && mut === root.lastAudioMuted) return
+
+        root.lastAudioVolume = vol
+        root.lastAudioMuted = mut
+        root.triggerOsd("volume", Math.round(vol * 100), mut)
+    }
+
+    function handleAudioChange() {
+        root.triggerVolumeOsd(false)
+    }
+
+    // ── Rastreador de Brillo (brightnessctl para Laptop) ──────────────────
+    Process {
+        id: backlightUdevMonitor
+        command: ["udevadm", "monitor", "--subsystem-match=backlight", "--udev"]
+        running: true
+        stdout: SplitParser {
+            onRead: data => {
+                if (data && (data.includes("change") || data.includes("backlight"))) {
+                    if (!brightnessQuery.running) brightnessQuery.running = true
+                }
+            }
+        }
+    }
+
+    Process {
+        id: brightnessQuery
+        command: ["bash", "-c", "brightnessctl -m 2>/dev/null | cut -d, -f4 | tr -d '% '"]
+        stdout: StdioCollector {
+            onStreamFinished: {
+                const val = parseFloat(String(text || "").trim())
+                if (isFinite(val)) {
+                    root.triggerBrightnessOsd(val)
+                }
+            }
+        }
+    }
+
+    property bool brightnessInitialized: false
+    property real lastBrightness: -1
+
+    function triggerBrightnessOsd(pct) {
+        if (!isFinite(pct)) return
+        const val = Math.max(0, Math.min(100, Math.round(pct)))
+        if (!root.brightnessInitialized) {
+            root.lastBrightness = val
+            root.brightnessInitialized = true
+            return
+        }
+        if (Math.abs(val - root.lastBrightness) < 1) return
+        root.lastBrightness = val
+        root.triggerOsd("brightness", val, false)
+    }
 
     // ── Notificación transitoria de batería (Dynamic Island) ──────────────
     property bool batteryToastVisible: false
     property string batteryToastText: ""
     property string batteryToastIcon: "󰂄"
     property color batteryToastColor: "#a6e3a1"
-    readonly property bool batteryToastOpen: batteryToastVisible && !launcherOpen && !controlCenterOpen && !minervaOpen && !wallpaperOpen && !powerMenuOpen && !notificationOpen && !minervaBusy
+    readonly property bool batteryToastOpen: batteryToastVisible && !launcherOpen && !controlCenterOpen && !minervaOpen && !wallpaperOpen && !powerMenuOpen && !notificationOpen && !minervaBusy && !osdOpen
 
     property int lastBatteryState: -1
     property real lastBatteryPct: -1
@@ -118,11 +291,11 @@ Item {
     readonly property int wallpaperHeight: 330
     readonly property int powerMenuWidth: 436
     readonly property int powerMenuHeight: 88
-    readonly property int minervaOrbIslandWidth: 210
+    readonly property int minervaWaveformIslandWidth: 210
     readonly property int batteryToastIslandWidth: 210
     readonly property bool minervaSettingsOpen: minervaPanelLoader.item ? minervaPanelLoader.item.settingsOpen : false
     readonly property int minervaSettingsHeight: minervaPanelLoader.item ? minervaPanelLoader.item.settingsImplicitHeight : minervaHeight
-    width: powerMenuOpen ? powerMenuWidth : (minervaOpen ? minervaWidth : (wallpaperOpen ? wallpaperWidth : (controlCenterOpen ? controlCenterWidth : (launcherOpen ? launcherWidth : (notificationOpen ? 430 : (isExpanded ? 530 : (minervaBusy ? minervaOrbIslandWidth : (batteryToastOpen ? batteryToastIslandWidth : 140))))))))
+    width: powerMenuOpen ? powerMenuWidth : (minervaOpen ? minervaWidth : (wallpaperOpen ? wallpaperWidth : (controlCenterOpen ? controlCenterWidth : (launcherOpen ? launcherWidth : (notificationOpen ? 430 : (isExpanded ? 530 : (minervaBusy ? minervaWaveformIslandWidth : (osdOpen ? osdIslandWidth : (batteryToastOpen ? batteryToastIslandWidth : 140)))))))))
     height: powerMenuOpen ? powerMenuHeight : (minervaOpen ? (minervaSettingsOpen ? Math.min(minervaHeight, minervaSettingsHeight) : minervaHeight) : (wallpaperOpen ? wallpaperHeight : (controlCenterOpen ? controlCenter.contentHeight : (launcherOpen ? launcher.contentHeight : (notificationOpen ? 92 : (isExpanded ? 110 : 38))))))
     property real radius: (powerMenuOpen || launcherOpen || controlCenterOpen || minervaOpen || notificationOpen || wallpaperOpen) ? 26 : (isExpanded ? 26 : (height / 2))
 
@@ -132,9 +305,9 @@ Item {
     // Animación de expansión con rebote dinámico (Apple Dynamic Island style)
     Behavior on width {
         NumberAnimation {
-            duration: (root.powerMenuOpen || root.launcherOpen || root.minervaOpen || root.wallpaperOpen || root.isExpanded || root.notificationOpen || root.minervaBusy || root.batteryToastOpen) ? 380 : 250
-            easing.type: (root.powerMenuOpen || root.launcherOpen || root.minervaOpen || root.wallpaperOpen || root.isExpanded || root.notificationOpen || root.minervaBusy || root.batteryToastOpen) ? Easing.OutBack : Easing.OutCubic
-            easing.overshoot: (root.powerMenuOpen || root.launcherOpen || root.minervaOpen || root.wallpaperOpen || root.isExpanded || root.notificationOpen || root.minervaBusy || root.batteryToastOpen) ? 1.15 : 0.0
+            duration: (root.powerMenuOpen || root.launcherOpen || root.minervaOpen || root.wallpaperOpen || root.isExpanded || root.notificationOpen || root.minervaBusy || root.batteryToastOpen || root.osdOpen) ? 380 : 250
+            easing.type: (root.powerMenuOpen || root.launcherOpen || root.minervaOpen || root.wallpaperOpen || root.isExpanded || root.notificationOpen || root.minervaBusy || root.batteryToastOpen || root.osdOpen) ? Easing.OutBack : Easing.OutCubic
+            easing.overshoot: (root.powerMenuOpen || root.launcherOpen || root.minervaOpen || root.wallpaperOpen || root.isExpanded || root.notificationOpen || root.minervaBusy || root.batteryToastOpen || root.osdOpen) ? 1.15 : 0.0
         }
     }
 
@@ -361,7 +534,7 @@ Item {
         islandWidth: root.width
         islandHeight: root.height
         rightMargin: 24
-        opacity: (root.powerMenuOpen || root.launcherOpen || root.controlCenterOpen || root.minervaOpen || root.notificationOpen || root.wallpaperOpen || (root.minervaBusy && !root.isExpanded) || root.batteryToastOpen) ? 0 : 1
+        opacity: (root.powerMenuOpen || root.launcherOpen || root.controlCenterOpen || root.minervaOpen || root.notificationOpen || root.wallpaperOpen || (root.minervaBusy && !root.isExpanded) || root.batteryToastOpen || root.osdOpen) ? 0 : 1
         visible: opacity > 0
 
         Behavior on opacity {
@@ -475,7 +648,7 @@ Item {
             onClicked: root.openMinerva()
         }
 
-        Minerva.SiriOrb {
+        Minerva.Minerva_waveform {
             anchors.fill: parent
             isRecording: root.minervaService ? root.minervaService.isRecording : false
             isTranscribing: root.minervaService ? root.minervaService.isTranscribing : false
@@ -548,7 +721,177 @@ Item {
         }
     }
 
-    // ── 9. DETECCIÓN DE HOVER SIN CONSUMIR CLICKS (HoverHandler) ─────────────
+    // ── 9. AVISO TRANSITORIO DE VOLUMEN Y BRILLO (Dynamic Island OSD) ────
+    Item {
+        id: osdItem
+        anchors.centerIn: parent
+        width: parent.width
+        height: parent.height
+        opacity: root.osdOpen ? 1 : 0
+        visible: opacity > 0
+        z: 23
+
+        Behavior on opacity {
+            NumberAnimation { duration: 160; easing.type: Easing.OutCubic }
+        }
+
+        RowLayout {
+            anchors.fill: parent
+            anchors.leftMargin: 16
+            anchors.rightMargin: 16
+            spacing: 10
+
+            Text {
+                text: {
+                    if (root.osdType === "volume") {
+                        if (root.osdMuted || root.osdValue === 0) return "󰝟"
+                        if (root.osdValue < 33) return "󰕿"
+                        if (root.osdValue < 66) return "󰖀"
+                        return "󰕾"
+                    } else {
+                        if (root.osdValue < 33) return "󰃞"
+                        if (root.osdValue < 66) return "󰃟"
+                        return "󰃠"
+                    }
+                }
+                color: root.osdMuted ? "#f38ba8" : (root.osdType === "volume" ? "#78d1d3" : "#f9e2af")
+                font.family: "Symbols Nerd Font, Iosevka Nerd Font"
+                font.pixelSize: 16
+                Layout.alignment: Qt.AlignVCenter
+            }
+
+            Rectangle {
+                id: osdTrack
+                Layout.fillWidth: true
+                Layout.preferredHeight: 6
+                Layout.alignment: Qt.AlignVCenter
+                radius: 3
+                color: Qt.rgba(1, 1, 1, 0.16)
+
+                Rectangle {
+                    id: osdFill
+                    anchors.left: parent.left
+                    anchors.top: parent.top
+                    anchors.bottom: parent.bottom
+                    width: Math.max(0, Math.min(parent.width, parent.width * (root.osdValue / 100)))
+                    radius: 3
+                    color: root.osdMuted ? "#f38ba8" : (root.osdType === "volume" ? "#78d1d3" : "#f9e2af")
+
+                    Behavior on width {
+                        NumberAnimation { duration: 90; easing.type: Easing.OutCubic }
+                    }
+                }
+            }
+
+            Text {
+                text: root.osdMuted ? "Mute" : Math.round(root.osdValue) + "%"
+                color: root.osdMuted ? "#f38ba8" : "#f5f2f4"
+                font.family: "SF Pro Display, SF Pro, sans-serif"
+                font.pixelSize: 12
+                font.weight: Font.DemiBold
+                Layout.preferredWidth: 36
+                horizontalAlignment: Text.AlignRight
+                Layout.alignment: Qt.AlignVCenter
+            }
+        }
+    }
+
+    // ── 10. INDICADOR PERIÓDICO DE TAREA PENDIENTE (SUTIL & ANTI-ANSIEDAD) ──
+    Item {
+        id: taskPipContainer
+        anchors.right: parent.right
+        anchors.rightMargin: 14
+        anchors.verticalCenter: parent.verticalCenter
+        width: 14
+        height: 14
+        z: 18
+
+        readonly property bool shouldBeVisible: root.hasMinervaPendingTasks
+            && root.taskReminderVisible
+            && !root.launcherOpen
+            && !root.controlCenterOpen
+            && !root.minervaOpen
+            && !root.wallpaperOpen
+            && !root.powerMenuOpen
+            && !root.notificationOpen
+            && !root.minervaBusy
+            && !root.batteryToastOpen
+            && !root.osdOpen
+            && !root.isExpanded
+
+        opacity: shouldBeVisible ? 1 : 0
+        visible: opacity > 0
+
+        Behavior on opacity {
+            NumberAnimation { duration: 400; easing.type: Easing.InOutQuad }
+        }
+
+        Rectangle {
+            id: taskPip
+            anchors.centerIn: parent
+            width: 6
+            height: 6
+            radius: 3
+
+            color: {
+                if (root.hasMinervaUrgentTasks || root.minervaTaskUrgency === "urgent") return "#f38ba8"
+                if (root.minervaTaskUrgency === "medium") return "#fab387"
+                return "#78d1d3"
+            }
+
+            Behavior on color {
+                ColorAnimation { duration: 250 }
+            }
+
+            // Pulso continuo suave en todos los estados (la velocidad aumenta según urgencia)
+            readonly property int pulsePeriod: {
+                if (root.hasMinervaUrgentTasks || root.minervaTaskUrgency === "urgent") return 1000
+                if (root.minervaTaskUrgency === "medium") return 1500
+                return 2000
+            }
+
+            SequentialAnimation on scale {
+                running: taskPipContainer.shouldBeVisible
+                loops: Animation.Infinite
+
+                NumberAnimation {
+                    to: 1.35
+                    duration: taskPip.pulsePeriod / 2
+                    easing.type: Easing.InOutSine
+                }
+                NumberAnimation {
+                    to: 0.85
+                    duration: taskPip.pulsePeriod / 2
+                    easing.type: Easing.InOutSine
+                }
+            }
+
+            SequentialAnimation on opacity {
+                running: taskPipContainer.shouldBeVisible
+                loops: Animation.Infinite
+
+                NumberAnimation {
+                    to: 1.0
+                    duration: taskPip.pulsePeriod / 2
+                    easing.type: Easing.InOutSine
+                }
+                NumberAnimation {
+                    to: 0.40
+                    duration: taskPip.pulsePeriod / 2
+                    easing.type: Easing.InOutSine
+                }
+            }
+        }
+
+        MouseArea {
+            anchors.fill: parent
+            anchors.margins: -8
+            cursorShape: Qt.PointingHandCursor
+            onClicked: root.openMinerva()
+        }
+    }
+
+    // ── 11. DETECCIÓN DE HOVER SIN CONSUMIR CLICKS (HoverHandler) ────────────
     HoverHandler {
         id: islandHover
         enabled: !root.launcherOpen && !root.controlCenterOpen && !root.minervaOpen && !root.notificationOpen && !root.wallpaperOpen && !root.powerMenuOpen

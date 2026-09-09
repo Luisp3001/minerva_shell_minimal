@@ -2,6 +2,6 @@ module Minerva
 Main 1.0 Main.qml
 ChatWidget 1.0 ChatWidget.qml
 CommandApprovalDialog 1.0 CommandApprovalDialog.qml
-SiriOrb 1.0 SiriOrb.qml
+Minerva_waveform 1.0 Minerva_waveform.qml
 SettingsPanel 1.0 SettingsPanel.qml
 singleton Theme 1.0 Theme.qml
