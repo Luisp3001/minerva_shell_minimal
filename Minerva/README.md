@@ -35,7 +35,7 @@ Después reinicia Quickshell. El instalador conserva un entorno local existente 
 - **Sistema de voz completo:** Wake word ("Minerva"), STT (Whisper), TTS triple (**Piper** local, **Fish Audio** en la nube con **Emotion Tags** y **Google Gemini TTS** con ~30 voces) y detección de silencio.
 - **Generación de imágenes:** Integración nativa con Gemini (`gemini-3.1-flash-image`) para generar imágenes a partir de descripciones de texto en resoluciones 1K (previsualizable en el chat) y 2K (guardado directo en disco en `~/Pictures/minerva`).
 - **Control de entorno de escritorio (Hyprland):** Navegación entre workspaces (1-10), reubicación de ventanas entre workspaces por clase o título y listado de ventanas activas vía `hyprctl`.
-- **Herramientas de documentos y RAG Efímero:** Creación de documentos Word (`.docx`) formateados desde Markdown con `pandoc`, edición quirúrgica de Word con `python-docx` y consulta semántica puntual (`query_document`) en PDF, DOCX y PPTX con `MarkItDown` + `ChromaDB` sin necesidad de leer todo el archivo.
+- **Herramientas de documentos y RAG Efímero:** Creación de documentos Word (`.docx`) en hoja tamaño Carta desde Markdown con `pandoc` y una plantilla editorial propia (tipografía, texto justificado, espaciado, tablas y paginación), ampliación de Word conservando el estilo del original y consulta semántica puntual (`query_document`) en PDF, DOCX y PPTX con `MarkItDown` + `ChromaDB` sin necesidad de leer todo el archivo.
 - **Minerva_waveform:** Visualización animada por GPU (fragment shader) que reacciona al audio en tiempo real con RMS y 4 bandas FFT.
 - **Memoria a largo plazo:** Archivos Markdown (`user_profile.md` y `preferences.md`) para almacenar el perfil del usuario y sus preferencias entre sesiones, actualizables proactivamente con `update_memory`.
 - **Proactividad (Tareas):** Conexión a PostgreSQL para gestionar tareas con alertas visuales sutiles en el Minerva_waveform. Soporta **tareas recurrentes** (diaria, semanal, mensual, anual con `recurrence_month`) con auto-renovación en segundo plano.
@@ -267,8 +267,8 @@ Durante la reproducción de cualquier motor, un `AudioAnalyzer` calcula métrica
 | `read_docx`       | `tools/filesystem.py`  | Extrae contenido de un archivo Word (.docx) a Markdown           |
 | `read_pptx`       | `tools/filesystem.py`  | Extrae texto de presentaciones PowerPoint (.pptx) a Markdown     |
 | `read_excel`      | `tools/filesystem.py`  | Extrae contenido de hojas Excel (.xlsx) y CSV a Markdown         |
-| `create_docx`     | `tools/filesystem.py`  | Crea un archivo Word (.docx) formateado desde Markdown (pandoc)  |
-| `modify_docx`     | `tools/filesystem.py`  | Añade párrafos de texto al final de un archivo Word (.docx)      |
+| `create_docx`     | `tools/filesystem.py`  | Crea Word desde Markdown con una plantilla editorial propia      |
+| `modify_docx`     | `tools/filesystem.py`  | Añade Markdown conservando el estilo visual del Word original    |
 | `query_document`  | `tools/filesystem.py`  | Búsqueda semántica (RAG efímero) en PDF, DOCX, PPTX con ChromaDB |
 | `run_command`     | `tools/__init__.py`    | Ejecuta un comando bash (asíncrono, rastreado por `job_id`)      |
 | `check_job_status`| `tools/system.py`      | Consulta el estado y salida de comandos en segundo plano         |
@@ -346,7 +346,7 @@ El backend detecta automáticamente qué dependencias están instaladas y desact
 | `WEB_SEARCH_AVAILABLE`   | ddgs                                     | Búsqueda web              |
 | `CHROMADB_AVAILABLE`     | chromadb                                 | RAG efímero y Tool RAG    |
 | *(Google GenAI)*         | google-genai                             | Generación de imágenes (`generate_image`) y Gemini TTS |
-| *(Documentos Word)*      | pandoc (sistema), python-docx | Creación (`create_docx`) y edición (`modify_docx`) de Word |
+| *(Documentos Word)*      | pandoc (sistema), python-docx | Conversión y plantilla editorial para `create_docx`/`modify_docx` |
 | *(MarkItDown opcional)*  | markitdown                               | Extracción de texto de PDF, DOCX, PPTX y Excel/CSV |
 
 Piper TTS se carga bajo demanda (lazy-load) al primer uso de voz local.

@@ -5,6 +5,7 @@ import tempfile
 import types
 import unittest
 import zipfile
+import xml.etree.ElementTree as ET
 from unittest import mock
 
 from backend.core import memory
@@ -151,7 +152,45 @@ class PathSecurityTests(unittest.TestCase):
                     document.read(name)
                     for name in document.namelist()
                 )
+                styles = document.read("word/styles.xml")
+                document_xml = document.read("word/document.xml")
+                names = set(document.namelist())
             self.assertNotIn(b"/etc/passwd", expanded)
+            self.assertIn(b"Noto Serif", styles)
+            self.assertIn(b"Noto Sans", styles)
+            self.assertIn(b'w:jc w:val="both"', styles)
+            self.assertIn(b'w:styleId="Table"', styles)
+            self.assertIn("word/footer1.xml", names)
+            root = ET.fromstring(document_xml)
+            namespace = {
+                "w": "http://schemas.openxmlformats.org/wordprocessingml/2006/main"
+            }
+            page_size = root.find(".//w:sectPr/w:pgSz", namespace)
+            self.assertIsNotNone(page_size)
+            self.assertEqual(page_size.get(f"{{{namespace['w']}}}w"), "12240")
+            self.assertEqual(page_size.get(f"{{{namespace['w']}}}h"), "15840")
+
+    @unittest.skipUnless(filesystem.shutil.which("pandoc"), "pandoc no instalado")
+    def test_modify_docx_preserves_the_editorial_reference(self):
+        workspace = pathlib.Path(__file__).resolve().parent
+        with tempfile.TemporaryDirectory(dir=workspace) as temp_dir:
+            target = pathlib.Path(temp_dir) / "document.docx"
+            created = tool_create_docx(str(target), "# Informe\n\nTexto inicial.")
+
+            modified = tool_modify_docx(
+                str(target),
+                "## Anexo\n\nTexto añadido con el mismo estilo.",
+            )
+
+            self.assertIn("creado exitosamente", created)
+            self.assertIn("modificado exitosamente", modified)
+            with zipfile.ZipFile(target) as document:
+                styles = document.read("word/styles.xml")
+                content = document.read("word/document.xml")
+                names = set(document.namelist())
+            self.assertIn(b"Noto Serif", styles)
+            self.assertIn("word/footer1.xml", names)
+            self.assertIn("Anexo".encode(), content)
 
 
 class MemorySecurityTests(unittest.TestCase):

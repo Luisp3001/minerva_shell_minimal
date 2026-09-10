@@ -48,6 +48,7 @@ _tool_collection_lock = threading.Lock()
 # Siempre disponibles porque forman parte del control del agente. Las demás se
 # recuperan semánticamente para no inflar cada petición a Gemini.
 _ALWAYS_INCLUDE = {"manage_tasks", "run_command", "check_job_status"}
+_DOCX_REQUEST = re.compile(r"\b(?:word|docx)\b", re.IGNORECASE)
 
 
 def _ensure_tool_collection():
@@ -98,6 +99,10 @@ def get_relevant_tools(prompt: str, top_k: int = 8) -> list[dict]:
         if not results["ids"] or not results["ids"][0]:
             return TOOL_DEFINITIONS
         names = set(results["ids"][0]) | _ALWAYS_INCLUDE
+        if _DOCX_REQUEST.search(prompt):
+            # run_command siempre está disponible; garantiza que su alternativa
+            # segura y especializada también lo esté para solicitudes de Word.
+            names.update({"create_docx", "modify_docx"})
         return [
             tool
             for tool in TOOL_DEFINITIONS

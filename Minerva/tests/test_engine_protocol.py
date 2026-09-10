@@ -12,6 +12,7 @@ from backend.core.gemini_engine import (
     _iter_sse_data,
     _sanitize_history,
 )
+from backend import tools as backend_tools
 from backend.tools.registry import ToolRegistry
 
 
@@ -137,6 +138,26 @@ class ToolRegistryTests(unittest.TestCase):
             self.registry.dispatch("sample", {"count": 1, "extra": 2}, {}),
         )
         self.assertEqual(self.registry.dispatch("sample", {"count": 2}, {}), 2)
+
+
+class ToolSelectionTests(unittest.TestCase):
+    def test_word_request_always_exposes_native_docx_tools(self):
+        collection = mock.Mock()
+        collection.query.return_value = {"ids": [["web_search"]]}
+
+        with mock.patch.object(
+            backend_tools,
+            "_ensure_tool_collection",
+            return_value=collection,
+        ):
+            selected = backend_tools.get_relevant_tools(
+                "Crea un informe de Word",
+                top_k=1,
+            )
+
+        names = {tool["function"]["name"] for tool in selected}
+        self.assertIn("create_docx", names)
+        self.assertIn("modify_docx", names)
 
 
 if __name__ == "__main__":

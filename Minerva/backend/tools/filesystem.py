@@ -692,12 +692,268 @@ def tool_replace_lines(
         return f"Error reemplazando líneas: {e}"
 
 
+def _set_docx_font(style, name: str, size, color: str | None = None) -> None:
+    """Aplica una fuente también a los fallbacks tipográficos de Word."""
+    from docx.oxml.ns import qn
+
+    style.font.name = name
+    style.font.size = size
+    if color:
+        from docx.shared import RGBColor
+
+        style.font.color.rgb = RGBColor.from_string(color)
+    fonts = style.element.get_or_add_rPr().get_or_add_rFonts()
+    for attribute in ("ascii", "hAnsi", "eastAsia", "cs"):
+        fonts.set(qn(f"w:{attribute}"), name)
+
+
+def _set_keep_options(
+    style,
+    *,
+    keep_next: bool = False,
+    keep_lines: bool = False,
+) -> None:
+    """Evita títulos huérfanos y cortes tipográficos poco elegantes."""
+    from docx.oxml import OxmlElement
+    from docx.oxml.ns import qn
+
+    paragraph_properties = style.element.get_or_add_pPr()
+    options = [("widowControl", True)]
+    if keep_next:
+        options.append(("keepNext", True))
+    if keep_lines:
+        options.append(("keepLines", True))
+    for tag, enabled in options:
+        element = paragraph_properties.find(qn(f"w:{tag}"))
+        if element is None:
+            element = OxmlElement(f"w:{tag}")
+            paragraph_properties.append(element)
+        element.set(qn("w:val"), "1" if enabled else "0")
+
+
+def _add_style_border(style, *, side: str, color: str, size: int) -> None:
+    """Añade un borde discreto a un estilo de párrafo."""
+    from docx.oxml import OxmlElement
+    from docx.oxml.ns import qn
+
+    paragraph_properties = style.element.get_or_add_pPr()
+    borders = paragraph_properties.find(qn("w:pBdr"))
+    if borders is None:
+        borders = OxmlElement("w:pBdr")
+        paragraph_properties.append(borders)
+    border = OxmlElement(f"w:{side}")
+    border.set(qn("w:val"), "single")
+    border.set(qn("w:sz"), str(size))
+    border.set(qn("w:space"), "4")
+    border.set(qn("w:color"), color)
+    borders.append(border)
+
+
+def _create_elegant_docx_reference(path: pathlib.Path) -> None:
+    """Genera el reference.docx sobrio que usa create_docx por defecto.
+
+    Mantener la plantilla como código evita versionar un binario opaco y deja
+    todos los criterios visuales auditables junto a la herramienta.
+    """
+    from docx import Document
+    from docx.enum.style import WD_STYLE_TYPE
+    from docx.enum.text import WD_ALIGN_PARAGRAPH
+    from docx.oxml import OxmlElement
+    from docx.oxml.ns import qn
+    from docx.shared import Cm, Pt
+
+    document = Document()
+    section = document.sections[0]
+    # Carta (8.5 × 11 in): se fija explícitamente para que OnlyOffice no
+    # sustituya el tamaño por A4 al abrir documentos nuevos.
+    section.page_width = Cm(21.59)
+    section.page_height = Cm(27.94)
+    section.top_margin = Cm(2.35)
+    section.bottom_margin = Cm(2.25)
+    section.left_margin = Cm(2.45)
+    section.right_margin = Cm(2.45)
+    section.header_distance = Cm(1.1)
+    section.footer_distance = Cm(1.15)
+
+    styles = document.styles
+
+    def paragraph_style(name: str, base: str | None = None):
+        try:
+            style = styles[name]
+        except KeyError:
+            style = styles.add_style(name, WD_STYLE_TYPE.PARAGRAPH)
+        if base:
+            style.base_style = styles[base]
+        return style
+
+    normal = styles["Normal"]
+    _set_docx_font(normal, "Noto Serif", Pt(10.5), "2F3437")
+    normal.paragraph_format.alignment = WD_ALIGN_PARAGRAPH.JUSTIFY
+    normal.paragraph_format.line_spacing = 1.18
+    normal.paragraph_format.space_after = Pt(7)
+    _set_keep_options(normal)
+
+    for name in ("Body Text", "First Paragraph"):
+        style = paragraph_style(name, "Normal")
+        _set_docx_font(style, "Noto Serif", Pt(10.5), "2F3437")
+        style.paragraph_format.alignment = WD_ALIGN_PARAGRAPH.JUSTIFY
+        style.paragraph_format.line_spacing = 1.18
+        style.paragraph_format.space_after = Pt(7)
+        _set_keep_options(style)
+
+    compact = paragraph_style("Compact", "Normal")
+    _set_docx_font(compact, "Noto Serif", Pt(10), "2F3437")
+    compact.paragraph_format.alignment = WD_ALIGN_PARAGRAPH.LEFT
+    compact.paragraph_format.line_spacing = 1.1
+    compact.paragraph_format.space_after = Pt(3)
+    _set_keep_options(compact)
+
+    title = styles["Title"]
+    _set_docx_font(title, "Noto Serif Display", Pt(30), "243447")
+    title.font.bold = True
+    title.paragraph_format.alignment = WD_ALIGN_PARAGRAPH.LEFT
+    title.paragraph_format.space_before = Pt(20)
+    title.paragraph_format.space_after = Pt(8)
+    _set_keep_options(title, keep_next=True, keep_lines=True)
+
+    subtitle = styles["Subtitle"]
+    _set_docx_font(subtitle, "Noto Serif", Pt(12), "6B7074")
+    subtitle.font.italic = True
+    subtitle.paragraph_format.alignment = WD_ALIGN_PARAGRAPH.LEFT
+    subtitle.paragraph_format.space_after = Pt(16)
+    _set_keep_options(subtitle, keep_next=True)
+
+    heading_specs = {
+        "Heading 1": (20, "243447", 22, 8),
+        "Heading 2": (14, "9A5F3A", 17, 6),
+        "Heading 3": (11.5, "3E4A50", 13, 4),
+        "Heading 4": (10.5, "3E4A50", 10, 3),
+    }
+    for name, (size, color, before, after) in heading_specs.items():
+        style = styles[name]
+        _set_docx_font(style, "Noto Sans", Pt(size), color)
+        style.font.bold = True
+        style.paragraph_format.alignment = WD_ALIGN_PARAGRAPH.LEFT
+        style.paragraph_format.space_before = Pt(before)
+        style.paragraph_format.space_after = Pt(after)
+        style.paragraph_format.keep_with_next = True
+        style.paragraph_format.keep_together = True
+        _set_keep_options(style, keep_next=True, keep_lines=True)
+    _add_style_border(styles["Heading 1"], side="bottom", color="C9A27E", size=8)
+
+    list_paragraph = styles["List Paragraph"]
+    _set_docx_font(list_paragraph, "Noto Serif", Pt(10.5), "2F3437")
+    list_paragraph.paragraph_format.line_spacing = 1.12
+    list_paragraph.paragraph_format.space_after = Pt(4)
+    _set_keep_options(list_paragraph)
+
+    for name in ("Quote", "Block Text"):
+        style = paragraph_style(name, "Normal")
+        _set_docx_font(style, "Noto Serif", Pt(10.5), "596166")
+        style.font.italic = True
+        style.paragraph_format.alignment = WD_ALIGN_PARAGRAPH.JUSTIFY
+        style.paragraph_format.left_indent = Cm(0.65)
+        style.paragraph_format.right_indent = Cm(0.25)
+        style.paragraph_format.space_before = Pt(6)
+        style.paragraph_format.space_after = Pt(9)
+        _add_style_border(style, side="left", color="C9A27E", size=12)
+        _set_keep_options(style)
+
+    for name in ("Caption", "Table Caption"):
+        style = paragraph_style(name, "Normal")
+        _set_docx_font(style, "Noto Serif", Pt(8.5), "6B7074")
+        style.font.italic = True
+        style.paragraph_format.alignment = WD_ALIGN_PARAGRAPH.CENTER
+        style.paragraph_format.space_before = Pt(4)
+        style.paragraph_format.space_after = Pt(8)
+        _set_keep_options(style, keep_next=name == "Table Caption")
+
+    try:
+        hyperlink = styles["Hyperlink"]
+    except KeyError:
+        hyperlink = styles.add_style("Hyperlink", WD_STYLE_TYPE.CHARACTER)
+    _set_docx_font(hyperlink, "Noto Serif", Pt(10.5), "8A5737")
+    hyperlink.font.underline = True
+
+    table_style = styles.add_style("Table", WD_STYLE_TYPE.TABLE)
+    _set_docx_font(table_style, "Noto Serif", Pt(9.5), "2F3437")
+    table_properties = OxmlElement("w:tblPr")
+    table_cell_margin = OxmlElement("w:tblCellMar")
+    for side, width in (("top", 90), ("left", 120), ("bottom", 90), ("right", 120)):
+        margin = OxmlElement(f"w:{side}")
+        margin.set(qn("w:w"), str(width))
+        margin.set(qn("w:type"), "dxa")
+        table_cell_margin.append(margin)
+    table_properties.append(table_cell_margin)
+    borders = OxmlElement("w:tblBorders")
+    for side, color, size in (
+        ("top", "243447", 8),
+        ("bottom", "243447", 8),
+        ("insideH", "D8D3CC", 4),
+        ("insideV", "E7E3DE", 4),
+    ):
+        border = OxmlElement(f"w:{side}")
+        border.set(qn("w:val"), "single")
+        border.set(qn("w:sz"), str(size))
+        border.set(qn("w:color"), color)
+        borders.append(border)
+    table_properties.append(borders)
+    table_style.element.append(table_properties)
+
+    first_row = OxmlElement("w:tblStylePr")
+    first_row.set(qn("w:type"), "firstRow")
+    row_cell_properties = OxmlElement("w:tcPr")
+    row_shading = OxmlElement("w:shd")
+    row_shading.set(qn("w:val"), "clear")
+    row_shading.set(qn("w:fill"), "243447")
+    row_cell_properties.append(row_shading)
+    first_row.append(row_cell_properties)
+    row_run_properties = OxmlElement("w:rPr")
+    row_bold = OxmlElement("w:b")
+    row_color = OxmlElement("w:color")
+    row_color.set(qn("w:val"), "FFFFFF")
+    row_run_properties.extend((row_bold, row_color))
+    first_row.append(row_run_properties)
+    table_style.element.append(first_row)
+
+    banded_row = OxmlElement("w:tblStylePr")
+    banded_row.set(qn("w:type"), "band1Horz")
+    banded_cell_properties = OxmlElement("w:tcPr")
+    banded_shading = OxmlElement("w:shd")
+    banded_shading.set(qn("w:val"), "clear")
+    banded_shading.set(qn("w:fill"), "F3F0EB")
+    banded_cell_properties.append(banded_shading)
+    banded_row.append(banded_cell_properties)
+    table_style.element.append(banded_row)
+
+    footer = section.footer.paragraphs[0]
+    footer.alignment = WD_ALIGN_PARAGRAPH.RIGHT
+    footer.paragraph_format.space_before = Pt(4)
+    footer_run = footer.add_run()
+    footer_run.font.name = "Noto Serif"
+    footer_run.font.size = Pt(8.5)
+    from docx.shared import RGBColor
+
+    footer_run.font.color.rgb = RGBColor.from_string("777777")
+    field_begin = OxmlElement("w:fldChar")
+    field_begin.set(qn("w:fldCharType"), "begin")
+    field_instruction = OxmlElement("w:instrText")
+    field_instruction.set(qn("xml:space"), "preserve")
+    field_instruction.text = " PAGE "
+    field_end = OxmlElement("w:fldChar")
+    field_end.set(qn("w:fldCharType"), "end")
+    footer_run._r.extend((field_begin, field_instruction, field_end))
+    _add_style_border(styles["Footer"], side="top", color="D8D3CC", size=4)
+
+    document.save(path)
+
+
 def tool_create_docx(
     path: str,
     markdown_content: str,
     overwrite: bool = False,
 ) -> str:
-    """Crea un archivo .docx desde Markdown mediante el ejecutable pandoc."""
+    """Crea un DOCX desde Markdown con una plantilla editorial propia."""
     try:
         p = _safe_path(path)
     except ValueError as e:
@@ -738,6 +994,14 @@ def tool_create_docx(
             ) as pandoc_home:
                 pandoc_environment = _document_environment()
                 pandoc_environment["HOME"] = pandoc_home
+                reference_path = pathlib.Path(pandoc_home) / "reference.docx"
+                try:
+                    _create_elegant_docx_reference(reference_path)
+                except ImportError:
+                    return (
+                        "Error: python-docx no está instalado; se necesita para "
+                        "crear la plantilla visual de Word."
+                    )
                 with (
                     tempfile.TemporaryFile() as ast_file,
                     tempfile.TemporaryFile() as parser_error,
@@ -789,6 +1053,7 @@ def tool_create_docx(
                             "pandoc",
                             "--from=json",
                             "--to=docx",
+                            f"--reference-doc={reference_path}",
                             "--output",
                             str(temp_path),
                         ],
@@ -839,8 +1104,8 @@ def tool_create_docx(
 def tool_modify_docx(path: str, instruction: str) -> str:
     """Añade texto al final de un archivo .docx existente usando pandoc.
 
-    Pipeline: docx → markdown (pandoc) → agregar texto → docx (pandoc).
-    No depende de python-docx.
+    Pipeline: docx → markdown → agregar texto → docx. El documento original se
+    usa como referencia para conservar sus estilos, márgenes y encabezados.
     """
     try:
         p = _safe_path(path)
@@ -966,6 +1231,7 @@ def tool_modify_docx(path: str, instruction: str) -> str:
                             "pandoc",
                             "--from=json",
                             "--to=docx",
+                            f"--reference-doc={p}",
                             "--output",
                             str(temp_path),
                         ],

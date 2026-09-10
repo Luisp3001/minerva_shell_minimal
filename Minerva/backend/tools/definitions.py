@@ -23,7 +23,7 @@ SYSTEM_PROMPT = f"""Eres Minerva, una asistente inteligente integrada en el escr
 - **NUNCA uses formato markdown (como asteriscos, negritas o cursivas).** El usuario te escucha a través de voz y los símbolos se leerían en voz alta (ej: "asterisco hola asterisco"). Genera solo texto plano.
 
 ## Herramientas disponibles
-- **Filesystem**: Puedes listar directorios (list_dir), leer archivos (read_file, read_pdf, read_docx, read_pptx, read_excel), inspeccionar metadatos (file_info), crear/sobreescribir archivos (write_file), crear documentos Word desde markdown (create_docx), modificar documentos Word añadiendo texto (modify_docx) y editar líneas específicas (replace_lines) dentro de {HOME}. IMPORTANTE: NUNCA uses comandos bash para leer o escribir archivos PDF, DOCX, PPTX o EXCEL; usa SIEMPRE las herramientas específicas (read_pdf, read_docx, create_docx, modify_docx, etc.). Para archivos grandes de texto, primero usa file_info para conocer el total de líneas, luego lee con read_file en bloques (start_line, end_line) de hasta 200 líneas. Usa replace_lines para ediciones quirúrgicas sin reescribir el archivo completo. Si intentas leer o editar más allá del final del archivo, recibirás una señal [EOF]. Para buscar información concreta dentro de un PDF/DOCX/PPTX largo sin leerlo completo, usa query_document con una pregunta específica (RAG efímero). Para MD/TXT usa read_file; para Excel/CSV usa read_excel.
+- **Filesystem**: Puedes listar directorios (list_dir), leer archivos (read_file, read_pdf, read_docx, read_pptx, read_excel), inspeccionar metadatos (file_info), crear/sobreescribir archivos (write_file), crear documentos Word desde markdown (create_docx), modificar documentos Word añadiendo texto (modify_docx) y editar líneas específicas (replace_lines) dentro de {HOME}. IMPORTANTE: Para cualquier archivo PDF, DOCX, PPTX o Excel usa SIEMPRE la herramienta específica. Si debes crear o modificar Word, llama directamente a create_docx o modify_docx: NUNCA escribas ni ejecutes un script Python, ni uses run_command, Bash o LibreOffice para sustituir esas herramientas. create_docx ya aplica una plantilla editorial cuidada y acepta Markdown internamente aunque tus respuestas al usuario sean texto plano. Para archivos grandes de texto, primero usa file_info para conocer el total de líneas, luego lee con read_file en bloques (start_line, end_line) de hasta 200 líneas. Usa replace_lines para ediciones quirúrgicas sin reescribir el archivo completo. Si intentas leer o editar más allá del final del archivo, recibirás una señal [EOF]. Para buscar información concreta dentro de un PDF/DOCX/PPTX largo sin leerlo completo, usa query_document con una pregunta específica (RAG efímero). Para MD/TXT usa read_file; para Excel/CSV usa read_excel.
 - **Comandos**: Puedes proponer comandos bash con run_command. Todos requieren confirmación explícita del usuario; los que usan sudo se autentican con pkexec. Tras aprobarse, se ejecutan en segundo plano de forma asíncrona y puedes usar check_job_status para consultar su estado, salida y código de retorno.
 - **Búsqueda web** (web_search): Tienes acceso a internet en tiempo real. Úsala cuando:
   - El usuario pregunte por noticias, eventos recientes o información que puede haber cambiado.
@@ -190,7 +190,7 @@ TOOL_DEFINITIONS = [
         "type": "function",
         "function": {
             "name": "create_docx",
-            "description": "Crea un archivo de Microsoft Word (.docx) a partir de contenido estructurado en Markdown (títulos, listas, tablas, negritas).",
+            "description": "Crea directamente un archivo de Microsoft Word (.docx) elegante a partir de Markdown. Aplica automáticamente hoja tamaño Carta, tipografía editorial, texto justificado con espaciado cómodo, títulos sobrios, márgenes equilibrados, citas, tablas y paginación. Úsala siempre para crear Word: no generes scripts Python ni uses run_command como sustituto.",
             "parameters": {
                 "type": "object",
                 "properties": {
@@ -200,7 +200,7 @@ TOOL_DEFINITIONS = [
                     },
                     "markdown_content": {
                         "type": "string",
-                        "description": "Contenido en formato Markdown que se convertirá a Word."
+                        "description": "Contenido estructurado en Markdown que se convertirá a Word. Puedes usar un bloque YAML inicial con title, subtitle, author y date para una portada tipográfica más cuidada."
                     },
                     "overwrite": {
                         "type": "boolean",
@@ -215,7 +215,7 @@ TOOL_DEFINITIONS = [
         "type": "function",
         "function": {
             "name": "modify_docx",
-            "description": "Añade texto al final de un archivo de Microsoft Word (.docx) existente.",
+            "description": "Añade Markdown al final de un archivo de Microsoft Word (.docx) existente conservando su estilo visual, márgenes, encabezados y pies. Úsala siempre para ampliar Word: no generes scripts Python ni uses run_command como sustituto.",
             "parameters": {
                 "type": "object",
                 "properties": {
@@ -360,7 +360,7 @@ TOOL_DEFINITIONS = [
         "type": "function",
         "function": {
             "name": "run_command",
-            "description": "Ejecuta un comando de bash en el sistema. NOTA: NO usarla para leer o inspeccionar archivos (PDF, Word, Excel, PowerPoint, texto) ni para listar directorios; para leer archivos usa siempre las herramientas específicas como read_excel, read_pptx, read_docx, read_pdf o read_file.",
+            "description": "Ejecuta un comando de bash en el sistema. NO la uses para leer o inspeccionar archivos (PDF, Word, Excel, PowerPoint, texto), listar directorios ni crear o modificar DOCX mediante scripts Python; usa siempre las herramientas específicas como create_docx, modify_docx, read_excel, read_pptx, read_docx, read_pdf o read_file.",
             "parameters": {
                 "type": "object",
                 "properties": {
