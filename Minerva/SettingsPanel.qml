@@ -4,6 +4,7 @@ Item {
     id: root
 
     property var aiWidget: null
+    property string draftPersonality: "minerva"
     property string draftTextModel: ""
     property string draftTtsProvider: "fish"
     property string draftTtsModel: ""
@@ -43,6 +44,7 @@ Item {
 
     function syncFromService() {
         if (!aiWidget) return
+        draftPersonality = aiWidget.activePersonality
         draftTextModel = aiWidget.geminiModel
         draftTtsProvider = aiWidget.ttsProvider
         draftGeminiVoice = aiWidget.geminiTtsVoice
@@ -70,12 +72,17 @@ Item {
         var textModel = draftTextModel.trim()
         var ttsModel = draftTtsModel.trim()
         if (textModel) aiWidget.geminiModel = textModel
-        aiWidget.ttsProvider = draftTtsProvider
-        if (draftTtsProvider === "fish" && ttsModel)
-            aiWidget.fishModel = ttsModel
-        else if (draftTtsProvider === "gemini" && ttsModel) {
-            aiWidget.geminiTtsModel = ttsModel
-            aiWidget.geminiTtsVoice = draftGeminiVoice.trim() || "Kore"
+        aiWidget.personality = draftPersonality
+        // Jarvis usa su perfil Fish fijo; la configuración de Minerva se
+        // conserva intacta para cuando el usuario vuelva a seleccionarla.
+        if (draftPersonality === "minerva") {
+            aiWidget.ttsProvider = draftTtsProvider
+            if (draftTtsProvider === "fish" && ttsModel)
+                aiWidget.fishModel = ttsModel
+            else if (draftTtsProvider === "gemini" && ttsModel) {
+                aiWidget.geminiTtsModel = ttsModel
+                aiWidget.geminiTtsVoice = draftGeminiVoice.trim() || "Kore"
+            }
         }
         aiWidget.saveSettings()
         closeRequested()
@@ -134,7 +141,7 @@ Item {
                 }
                 Text {
                     anchors.verticalCenter: parent.verticalCenter
-                    text: "Configuración de Minerva"
+                    text: "Configuración de " + (root.draftPersonality === "jarvis" ? "JARVIS" : "Minerva")
                     font.family: Theme.fontSans
                     font.pixelSize: 14
                     font.weight: Font.Bold
@@ -190,6 +197,60 @@ Item {
                 spacing: 14
 
                 Text {
+                    text: "Personalidad"
+                    font.family: Theme.fontSans
+                    font.pixelSize: 13
+                    font.weight: Font.Bold
+                    color: Theme.textPrimary
+                }
+                Text {
+                    width: parent.width
+                    text: "El perfil cambia la identidad, el trato, la voz y la palabra de activación."
+                    font.family: Theme.fontSans
+                    font.pixelSize: 11
+                    color: Theme.textMuted
+                    wrapMode: Text.Wrap
+                }
+                Flow {
+                    width: parent.width
+                    spacing: 8
+                    Repeater {
+                        model: [
+                            { value: "minerva", label: "Minerva" },
+                            { value: "jarvis", label: "JARVIS" }
+                        ]
+                        delegate: OptionChip {
+                            value: modelData.value
+                            label: modelData.label
+                            selected: root.draftPersonality === modelData.value
+                            onChosen: root.draftPersonality = value
+                        }
+                    }
+                }
+
+                Rectangle {
+                    width: parent.width
+                    height: jarvisProfileText.implicitHeight + 24
+                    radius: 14
+                    visible: root.draftPersonality === "jarvis"
+                    color: Qt.rgba(Theme.accent.r, Theme.accent.g, Theme.accent.b, 0.09)
+                    border.width: 1
+                    border.color: Qt.rgba(Theme.accent.r, Theme.accent.g, Theme.accent.b, 0.24)
+
+                    Text {
+                        id: jarvisProfileText
+                        anchors { left: parent.left; right: parent.right; verticalCenter: parent.verticalCenter; margins: 12 }
+                        text: "JARVIS usa Fish Audio con su voz dedicada y responde al decir \"Jarvis\". Requiere que tu API key de Fish Audio esté configurada."
+                        font.family: Theme.fontSans
+                        font.pixelSize: 11
+                        color: Theme.textMuted
+                        wrapMode: Text.Wrap
+                    }
+                }
+
+                Rectangle { width: parent.width; height: 1; color: Qt.rgba(1,1,1,0.07) }
+
+                Text {
                     text: "Modelo de texto"
                     font.family: Theme.fontSans
                     font.pixelSize: 13
@@ -198,7 +259,7 @@ Item {
                 }
                 Text {
                     width: parent.width
-                    text: "Minerva usa exclusivamente Gemini. Puedes elegir un modelo conocido o escribir uno nuevo."
+                    text: (root.draftPersonality === "jarvis" ? "JARVIS" : "Minerva") + " usa exclusivamente Gemini. Puedes elegir un modelo conocido o escribir uno nuevo."
                     font.family: Theme.fontSans
                     font.pixelSize: 11
                     color: Theme.textMuted
@@ -243,12 +304,14 @@ Item {
 
                 Text {
                     text: "Proveedor de voz"
+                    visible: root.draftPersonality === "minerva"
                     font.family: Theme.fontSans
                     font.pixelSize: 13
                     font.weight: Font.Bold
                     color: Theme.textPrimary
                 }
                 Flow {
+                    visible: root.draftPersonality === "minerva"
                     width: parent.width
                     spacing: 8
                     Repeater {
@@ -268,12 +331,14 @@ Item {
 
                 Text {
                     text: "Modelo de voz"
+                    visible: root.draftPersonality === "minerva"
                     font.family: Theme.fontSans
                     font.pixelSize: 13
                     font.weight: Font.Bold
                     color: Theme.textPrimary
                 }
                 Rectangle {
+                    visible: root.draftPersonality === "minerva"
                     width: parent.width
                     height: 44
                     radius: 14
@@ -297,6 +362,7 @@ Item {
                     }
                 }
                 Flow {
+                    visible: root.draftPersonality === "minerva"
                     width: parent.width
                     spacing: 8
                     Repeater {
@@ -312,7 +378,7 @@ Item {
                 Column {
                     width: parent.width
                     spacing: 8
-                    visible: root.draftTtsProvider === "gemini"
+                    visible: root.draftPersonality === "minerva" && root.draftTtsProvider === "gemini"
                     Text {
                         text: "Voz de Gemini TTS"
                         font.family: Theme.fontSans
@@ -344,7 +410,9 @@ Item {
 
                 Text {
                     width: parent.width
-                    text: "Las API keys, Voice ID y demás valores existentes se conservan sin mostrarse aquí."
+                    text: root.draftPersonality === "jarvis"
+                        ? "La API key de Fish Audio y los demás secretos se conservan sin mostrarse aquí."
+                        : "Las API keys, Voice ID y demás valores existentes se conservan sin mostrarse aquí."
                     font.family: Theme.fontSans
                     font.pixelSize: 10
                     color: Theme.textMuted

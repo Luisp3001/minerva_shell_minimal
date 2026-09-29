@@ -3,6 +3,7 @@
   "geminiApiKey": "",
   "geminiModel": "gemini-2.5-flash",
   "aiTemperature": "0.7",
+  "personality": "minerva",
   "ttsProvider": "piper",
   "fishApiKey": "",
   "fishVoiceId": "",

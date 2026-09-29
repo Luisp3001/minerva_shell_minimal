@@ -15,6 +15,12 @@ Item {
     property string geminiModel: "gemini-2.5-flash"
     property string aiTemperature: "0.7"
 
+    // ── Perfil del asistente ────────────────────────────────────────────────────────────
+    property string personality: "minerva"
+    readonly property string activePersonality: personality === "jarvis" ? "jarvis" : "minerva"
+    readonly property string assistantName: activePersonality === "jarvis" ? "JARVIS" : "Minerva"
+    readonly property string jarvisFishVoiceId: "ae74d1059517440aa6e5d2d50598d179"
+
     // ── Configuración de TTS ──────────────────────────────────────────────────────
     property string ttsProvider:  "piper"   // "piper" (local) | "fish" (Fish Audio API) | "gemini" (Gemini TTS)
     property string fishApiKey:   ""
@@ -22,6 +28,8 @@ Item {
     property string fishModel:    "s2-pro"  // speech-1.5 | speech-1.6 | s2-pro | s1 | s1-mini | agent-x0
     property string geminiTtsVoice: "Kore"                 // Kore, Aoede, Puck, Charon, Zephyr, etc.
     property string geminiTtsModel: "gemini-2.5-flash-tts"  // gemini-2.5-flash-tts | gemini-2.5-pro-tts
+    readonly property string effectiveTtsProvider: activePersonality === "jarvis" ? "fish" : ttsProvider
+    readonly property string effectiveFishVoiceId: activePersonality === "jarvis" ? jarvisFishVoiceId : fishVoiceId
 
     // Los secretos permanecen fuera del repositorio. El formato preferido es
     // ~/.config/minerva/settings.json; durante la transición también se lee la
@@ -33,12 +41,16 @@ Item {
         if (settings.geminiApiKey !== undefined)   geminiApiKey = settings.geminiApiKey
         if (settings.geminiModel !== undefined)    geminiModel = settings.geminiModel
         if (settings.aiTemperature !== undefined)  aiTemperature = String(settings.aiTemperature)
+        if (settings.personality !== undefined)
+            personality = String(settings.personality).toLowerCase() === "jarvis" ? "jarvis" : "minerva"
         if (settings.ttsProvider !== undefined)    ttsProvider = settings.ttsProvider
         if (settings.fishApiKey !== undefined)     fishApiKey = settings.fishApiKey
         if (settings.fishVoiceId !== undefined)    fishVoiceId = settings.fishVoiceId
         if (settings.fishModel !== undefined)      fishModel = settings.fishModel
         if (settings.geminiTtsVoice !== undefined) geminiTtsVoice = settings.geminiTtsVoice
         if (settings.geminiTtsModel !== undefined) geminiTtsModel = settings.geminiTtsModel
+        if (backendReady)
+            sendToBackend({ type: "set_personality", personality: widget.activePersonality })
     }
 
     function saveSettings() {
@@ -47,6 +59,7 @@ Item {
             geminiApiKey: widget.geminiApiKey,
             geminiModel: widget.geminiModel,
             aiTemperature: widget.aiTemperature,
+            personality: widget.activePersonality,
             ttsProvider: widget.ttsProvider,
             fishApiKey: widget.fishApiKey,
             fishVoiceId: widget.fishVoiceId,
@@ -55,6 +68,7 @@ Item {
             geminiTtsModel: widget.geminiTtsModel
         }
         sendToBackend({ type: "save_settings", settings: data })
+        sendToBackend({ type: "set_personality", personality: widget.activePersonality })
         widget._primarySettingsLoaded = true
     }
 
@@ -98,7 +112,7 @@ Item {
     property bool   hasUrgentTasks: false
     property string taskUrgency: "low"
     property bool   showPendingOrb: false
-    property string lastAISnippet: "Minerva"
+    property string lastAISnippet: assistantName
     readonly property string modelName: geminiModel
     
     Timer {
@@ -388,6 +402,7 @@ Item {
             case "ready":
                 backendReady = true
                 backendRestartAttempts = 0
+                sendToBackend({ type: "set_personality", personality: widget.activePersonality })
                 console.info("Minerva: backend listo (" + (msg.model || "modelo sin nombre") + ")")
                 break
             case "token":
@@ -567,9 +582,10 @@ Item {
                 gemini_api_key: widget.geminiApiKey,
                 gemini_model:   widget.geminiModel,
                 temperature:    widget.aiTemperature,
-                tts_provider:     widget.ttsProvider,
+                personality:      widget.activePersonality,
+                tts_provider:     widget.effectiveTtsProvider,
                 fish_api_key:     widget.fishApiKey,
-                fish_voice_id:    widget.fishVoiceId,
+                fish_voice_id:    widget.effectiveFishVoiceId,
                 fish_model:       widget.fishModel,
                 gemini_tts_voice: widget.geminiTtsVoice,
                 gemini_tts_model: widget.geminiTtsModel
@@ -591,6 +607,7 @@ Item {
         function status(): string {
             return JSON.stringify({
                 ready: widget.backendReady,
+                personality: widget.activePersonality,
                 provider: widget.aiProvider,
                 model: widget.modelName,
                 recording: widget.isRecording,

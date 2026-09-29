@@ -155,6 +155,7 @@ class VoiceManager:
         self.vosk_model = None
         self.vosk_recognizer = None
         self.wake_word_thread = None
+        self.wake_word = "minerva"
         self.dependencies_ready = False
         self.initialization_error = ""
         self._initialization_started = False
@@ -626,6 +627,15 @@ class VoiceManager:
 
     # ── Wake word (Vosk) ──────────────────────────────────────────────────────
 
+    def set_wake_word(self, personality: str) -> None:
+        """Cambia en caliente la palabra de activación del perfil activo."""
+        normalized = str(personality).strip().lower()
+        self.wake_word = "jarvis" if normalized == "jarvis" else "minerva"
+        print(
+            f"[VoiceManager] Wake word: {self.wake_word!r}",
+            file=sys.stderr,
+        )
+
     def _wake_word_worker(self):
         if not self.vosk_model:
             return
@@ -677,7 +687,13 @@ class VoiceManager:
                 res  = json.loads(self.vosk_recognizer.PartialResult())
                 text = res.get("partial", "")
 
-            if "minerva" in text.lower():
+            recognized = text.lower()
+            wake_variants = (
+                {"jarvis", "yarvis"}
+                if self.wake_word == "jarvis"
+                else {"minerva"}
+            )
+            if any(keyword in recognized for keyword in wake_variants):
                 if not self.is_recording:
                     self.vosk_recognizer.Reset()
                     emit({"type": "wake_word_detected"})

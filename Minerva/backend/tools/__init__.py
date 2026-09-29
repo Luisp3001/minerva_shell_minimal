@@ -11,7 +11,12 @@ from typing import Any
 from ..core.config import HOME
 from ..core.io import classify_cmd, emit
 from ..core.job_manager import CommandJob, job_mgr
-from .definitions import FISH_AUDIO_EMOTION_PROMPT, SYSTEM_PROMPT, TOOL_DEFINITIONS
+from .definitions import (
+    FISH_AUDIO_EMOTION_PROMPT,
+    SYSTEM_PROMPT,
+    TOOL_DEFINITIONS,
+    get_system_prompt,
+)
 from .filesystem import (
     tool_create_docx,
     tool_file_info,

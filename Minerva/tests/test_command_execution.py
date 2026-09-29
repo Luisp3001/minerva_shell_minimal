@@ -5,6 +5,7 @@ from unittest import mock
 
 import main
 from backend.core.job_manager import job_mgr
+from backend.tools import get_system_prompt
 
 
 class CommandExecutionTests(unittest.TestCase):
@@ -53,6 +54,40 @@ class CommandExecutionTests(unittest.TestCase):
 
 
 class CoordinatorValidationTests(unittest.TestCase):
+    def test_chat_accepts_and_normalizes_jarvis_personality(self):
+        context = main._parse_chat_message({
+            "type": "chat",
+            "message": "hello",
+            "history": [],
+            "settings": {"personality": "JARVIS"},
+        })
+
+        self.assertEqual(context.settings["personality"], "jarvis")
+
+    def test_chat_rejects_unknown_personality(self):
+        with self.assertRaisesRegex(ValueError, "minerva o jarvis"):
+            main._parse_chat_message({
+                "type": "chat",
+                "message": "hello",
+                "history": [],
+                "settings": {"personality": "ultron"},
+            })
+
+    def test_personality_prompts_have_distinct_identities(self):
+        minerva_prompt = get_system_prompt("minerva")
+        jarvis_prompt = get_system_prompt("jarvis")
+
+        self.assertIn("Eres Minerva", minerva_prompt)
+        self.assertIn("Eres JARVIS", jarvis_prompt)
+        self.assertIn("señor", jarvis_prompt)
+        self.assertNotIn("Eres Minerva", jarvis_prompt)
+
+    def test_voice_manager_switches_wake_word_with_personality(self):
+        main.voice_mgr.set_wake_word("jarvis")
+        self.assertEqual(main.voice_mgr.wake_word, "jarvis")
+        main.voice_mgr.set_wake_word("minerva")
+        self.assertEqual(main.voice_mgr.wake_word, "minerva")
+
     def test_chat_rejects_unknown_settings(self):
         with self.assertRaisesRegex(ValueError, "desconocidos"):
             main._parse_chat_message({

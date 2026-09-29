@@ -11,7 +11,7 @@ El nombre viene de la diosa romana de la sabiduría.
 - El orbe de Minerva vive en la isla. Al pulsarlo abre el chat de `600 × 560`.
 - El panel también se alterna con `qs ipc call shell toggleMinerva` (añade `-p /ruta/al/shell` si la configuración no es la predeterminada).
 - `Esc` o el botón de cerrar devuelven la isla al estado compacto.
-- El engranaje del encabezado —o `Ctrl+,`— abre los selectores de modelo y voz.
+- El engranaje del encabezado —o `Ctrl+,`— abre los selectores de personalidad, modelo y voz.
 - El backend es único para todas las pantallas y conserva conversación, tareas y estado de voz al cambiar de monitor.
 - Todos los comandos de shell abren automáticamente el chat para pedir confirmación; los privilegiados se autentican mediante `pkexec`.
 
@@ -32,7 +32,8 @@ Después reinicia Quickshell. El instalador conserva un entorno local existente 
 - **Gemini con streaming:** Motor de texto en la nube con streaming de tokens, visión y tool calls.
 - **Agentic loop:** La IA puede invocar herramientas de forma iterativa (hasta 12 turnos) para completar tareas complejas.
 - **Ejecución de comandos asíncrona:** Coordinada vía `JobManager` thread-safe con rastreo por `job_id`, turnos multi-comando, streaming de salida en tiempo real e inspección de estado con `check_job_status` — no se congela mientras espera.
-- **Sistema de voz completo:** Wake word ("Minerva"), STT (Whisper), TTS triple (**Piper** local, **Fish Audio** en la nube con **Emotion Tags** y **Google Gemini TTS** con ~30 voces) y detección de silencio.
+- **Personalidades intercambiables:** Perfiles Minerva y JARVIS con identidad, trato, system prompt, voz y wake word propios, seleccionables y persistentes desde la UI.
+- **Sistema de voz completo:** Wake word dependiente del perfil ("Minerva" o "Jarvis"), STT (Whisper), TTS triple (**Piper** local, **Fish Audio** en la nube con **Emotion Tags** y **Google Gemini TTS** con ~30 voces) y detección de silencio.
 - **Generación de imágenes:** Integración nativa con Gemini (`gemini-3.1-flash-image`) para generar imágenes a partir de descripciones de texto en resoluciones 1K (previsualizable en el chat) y 2K (guardado directo en disco en `~/Pictures/minerva`).
 - **Control de entorno de escritorio (Hyprland):** Navegación entre workspaces (1-10), reubicación de ventanas entre workspaces por clase o título y listado de ventanas activas vía `hyprctl`.
 - **Herramientas de documentos y RAG Efímero:** Creación de documentos Word (`.docx`) en hoja tamaño Carta desde Markdown con `pandoc` y una plantilla editorial propia (tipografía, texto justificado, espaciado, tablas y paginación), ampliación de Word conservando el estilo del original y consulta semántica puntual (`query_document`) en PDF, DOCX y PPTX con `MarkItDown` + `ChromaDB` sin necesidad de leer todo el archivo.
@@ -68,7 +69,7 @@ Minerva/
 │                                #   - Previsualización de imágenes generadas por IA
 │                                #   - Input con micrófono, adjuntar imagen, placeholder dinámico
 ├── CommandApprovalDialog.qml    # Cola y diálogo de aprobación para todo comando shell
-├── SettingsPanel.qml            # Selector persistente de modelo y configuración TTS
+├── SettingsPanel.qml            # Selector persistente de personalidad, modelo y TTS
 ├── Minerva_waveform.qml             # Visualizador waveform animado (GPU ShaderEffect):
 │                                #   - Estados: idle, recording, transcribing, thinking, speaking
 │                                #   - Recibe audioRms + 4 bandas FFT como uniforms
@@ -134,7 +135,7 @@ Minerva/
     └── tools/                   # Herramientas que la IA puede invocar
         ├── __init__.py          # Exporta dispatch_tool() (despachador centralizado),
         │                        # TOOL_DEFINITIONS, SYSTEM_PROMPT, get_relevant_tools() (RAG)
-        ├── definitions.py       # SYSTEM_PROMPT (personalidad, reglas, contexto, FISH_AUDIO_EMOTION_PROMPT)
+        ├── definitions.py       # Prompts Minerva/JARVIS, reglas comunes, contexto y Emotion Tags
         │                        # TOOL_DEFINITIONS (esquemas JSON de todas las herramientas)
         ├── registry.py          # Registro de handlers y validación de JSON Schema
         ├── filesystem.py        # list_dir, file_info, read_file, write_file, replace_lines,
@@ -178,6 +179,7 @@ El frontend y el backend se comunican por el mismo subproceso, sin abrir un puer
 | `stop_tts`        | Detener la síntesis de voz                           |
 | `ping`            | Health check (retorna `ready`)                       |
 | `save_settings`   | Guardado atómico de ajustes privados                 |
+| `set_personality` | Aplica en caliente el wake word del perfil activo       |
 
 **Python → QML (eventos):** El backend escribe una línea JSON por evento a stdout, que QML lee vía `SplitParser`. Los tipos de evento incluyen:
 
@@ -199,7 +201,8 @@ El frontend y el backend se comunican por el mismo subproceso, sin abrir un puer
 | `voice_recording_stopped`| Grabación detenida                                     |
 | `voice_transcribing`     | Transcribiendo audio con Whisper                       |
 | `voice_recognized`       | Texto transcrito listo                                 |
-| `wake_word_detected`     | Se detectó "Minerva" via Vosk                          |
+| `wake_word_detected`     | Se detectó el wake word activo mediante Vosk           |
+| `personality_changed`    | Confirma el cambio en caliente de personalidad            |
 | `silence_detected`       | Silencio detectado, fin de dictado                     |
 | `voice_speaking_started` | TTS comienza a hablar                                  |
 | `voice_speaking_stopped` | TTS terminó de hablar                                  |
@@ -213,7 +216,7 @@ El frontend y el backend se comunican por el mismo subproceso, sin abrir un puer
 ```
 Usuario escribe → QML escribe JSONL {"type":"chat"} → main.py recibe
     │
-    ├── Inyecta fecha al SYSTEM_PROMPT
+    ├── Selecciona el system prompt de Minerva o JARVIS e inyecta la fecha
     ├── Inyecta memoria (user_profile.md y preferences.md) al prompt
     ├── Inyecta tareas pendientes proactivamente (si aplican)
     ├── Construye historial [system, ...history, user]
@@ -241,7 +244,7 @@ Usuario escribe → QML escribe JSONL {"type":"chat"} → main.py recibe
 
 Minerva tiene un pipeline de voz completo con tres subsistemas independientes:
 
-**Wake word (siempre activo):** Un hilo dedicado escucha el micrófono continuamente usando Vosk con un modelo de español. Cuando detecta la palabra "minerva" en el flujo de audio, emite `wake_word_detected` y la UI activa la grabación automáticamente.
+**Wake word (siempre activo):** Un hilo dedicado escucha el micrófono continuamente usando Vosk con un modelo de español. Usa "minerva" con el perfil Minerva y "jarvis" con el perfil JARVIS (también tolera la transcripción "yarvis"). El cambio se aplica en caliente y al detectar la palabra emite `wake_word_detected` para que la UI active la grabación automáticamente.
 
 **STT (Speech-to-Text):** Al activar la grabación (botón de micrófono o wake word), el audio del micrófono se acumula en un búfer. Cuando se detiene la grabación (manual o por detección de silencio), el audio se transcribe con Whisper (pywhispercpp, modelo small) y el texto resultante se envía como si el usuario lo hubiera escrito.
 
@@ -251,6 +254,13 @@ Minerva tiene un pipeline de voz completo con tres subsistemas independientes:
 - **Google Gemini TTS (API en la nube):** Síntesis neural multilingüe con la API oficial de Google (`google-genai`). Admite modelos `gemini-2.5-flash-tts` y `gemini-2.5-pro-tts` con ~30 voces preconstruidas (ej: `Kore`, `Aoede`, `Puck`, `Charon`, `Zephyr`, etc.) convertidas directamente a audio PCM 24kHz.
 
 Durante la reproducción de cualquier motor, un `AudioAnalyzer` calcula métricas (RMS + FFT) que se envían al frontend para animar el Minerva_waveform en sincronía con la voz.
+
+### Perfiles de personalidad
+
+- **Minerva:** conserva el comportamiento original y el proveedor/voz TTS configurado por el usuario.
+- **JARVIS:** usa un system prompt propio de tono sereno, formal, preciso y con humor británico sutil; fuerza Fish Audio y el Voice ID dedicado `ae74d1059517440aa6e5d2d50598d179`. Requiere una API key de Fish Audio válida. La configuración de voz de Minerva se conserva para restaurarla al volver a ese perfil.
+
+El nombre visible del chat también sigue el perfil activo. La selección se guarda en `settings.json` y se sincroniza con Vosk cada vez que arranca el backend.
 
 ---
 
@@ -340,7 +350,7 @@ El backend detecta automáticamente qué dependencias están instaladas y desact
 | Flag                     | Dependencias requeridas                  | Funcionalidad             |
 |--------------------------|------------------------------------------|---------------------------|
 | `VOICE_AVAILABLE`        | sounddevice, soundfile, pywhispercpp     | Grabación y transcripción (STT) |
-| `VOSK_AVAILABLE`         | vosk                                     | Wake word ("Minerva")     |
+| `VOSK_AVAILABLE`         | vosk                                     | Wake word del perfil ("Minerva"/"Jarvis") |
 | `FISH_AUDIO_AVAILABLE`   | fish_audio_sdk                           | TTS en la nube con Emotion Tags |
 | `GEMINI_TTS_AVAILABLE`   | google-genai                             | TTS en la nube con Google Gemini (~30 voces) |
 | `WEB_SEARCH_AVAILABLE`   | ddgs                                     | Búsqueda web              |
@@ -362,6 +372,7 @@ Los ajustes de IA, voz e imágenes se cargan desde `~/.config/minerva/settings.j
 | API Key Gemini    | `geminiApiKey`  | Clave de API para Google Generative AI (Chat, Visión, Imágenes y TTS) |
 | Modelo Gemini     | `geminiModel`   | Ej: `gemini-2.5-flash`                           |
 | Temperatura       | `aiTemperature` | Creatividad del modelo (0.0 – 1.0)              |
+| Personalidad      | `personality`   | `"minerva"` o `"jarvis"`; cambia prompt, trato, voz y wake word |
 | Proveedor TTS     | `ttsProvider`   | `"piper"` (local), `"fish"` (Fish Audio) o `"gemini"` (Google Gemini TTS) |
 | Voz Gemini TTS    | `geminiTtsVoice`| Voz preconstruida de Google (ej: `Kore`, `Aoede`, `Puck`, `Charon`) |
 | Modelo Gemini TTS | `geminiTtsModel`| Modelo de TTS (ej: `gemini-2.5-flash-tts`, `gemini-2.5-pro-tts`) |

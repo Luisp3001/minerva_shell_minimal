@@ -46,7 +46,7 @@ from backend.core.tasks_db import (
     renew_recurring_tasks,
 )
 from backend.core.voice import VOICE_AVAILABLE, voice_mgr
-from backend.tools import FISH_AUDIO_EMOTION_PROMPT, SYSTEM_PROMPT
+from backend.tools import FISH_AUDIO_EMOTION_PROMPT, get_system_prompt
 
 
 MAX_IPC_LINE = 2 * 1024 * 1024
@@ -72,6 +72,7 @@ _SETTING_KEYS = {
     "geminiModel",
     "geminiTtsModel",
     "geminiTtsVoice",
+    "personality",
     "ttsProvider",
 }
 _CHAT_SETTING_KEYS = {
@@ -82,6 +83,7 @@ _CHAT_SETTING_KEYS = {
     "gemini_model",
     "gemini_tts_model",
     "gemini_tts_voice",
+    "personality",
     "provider",
     "temperature",
     "tts_provider",
@@ -187,7 +189,13 @@ def _clean_chat_settings(value: object) -> dict:
             raise ValueError(f"El ajuste de chat {key} debe ser texto")
         if len(str(item)) > 4096:
             raise ValueError(f"El ajuste de chat {key} es demasiado largo")
-        cleaned[key] = item
+        if key == "personality":
+            normalized = item.strip().lower()
+            if normalized not in {"minerva", "jarvis"}:
+                raise ValueError("personality debe ser minerva o jarvis")
+            cleaned[key] = normalized
+        else:
+            cleaned[key] = item
     return cleaned
 
 
@@ -220,7 +228,9 @@ def _prepare_context(context: ChatContext) -> bool:
         return True
 
     now_text = datetime.datetime.now().strftime("%A, %d de %B de %Y, %H:%M")
-    system_prompt = SYSTEM_PROMPT.replace("{fecha_actual}", now_text)
+    system_prompt = get_system_prompt(
+        context.settings.get("personality", "minerva")
+    ).replace("{fecha_actual}", now_text)
     if context.settings.get("tts_provider", "piper") == "fish":
         system_prompt += FISH_AUDIO_EMOTION_PROMPT
 
@@ -299,6 +309,7 @@ def _run_chat(context: ChatContext) -> None:
 
     settings = context.settings
     if VOICE_AVAILABLE:
+        voice_mgr.set_wake_word(settings.get("personality", "minerva"))
         voice_mgr.set_tts_provider(
             provider=settings.get("tts_provider", "piper"),
             fish_api_key=settings.get("fish_api_key", ""),
@@ -777,7 +788,15 @@ def _save_settings(value: object) -> None:
         if len(rendered) > 4096:
             emit_error(f"El ajuste {key} es demasiado largo")
             return
-        settings[key] = item
+        if key == "personality" and rendered.strip().lower() not in {
+            "minerva",
+            "jarvis",
+        }:
+            emit_error("personality debe ser minerva o jarvis")
+            return
+        settings[key] = (
+            rendered.strip().lower() if key == "personality" else item
+        )
 
     config_dir = pathlib.Path(MINERVA_CONFIG_DIR)
     config_dir.mkdir(mode=0o700, parents=True, exist_ok=True)
@@ -853,6 +872,15 @@ def main() -> None:
             continue
         if msg_type == "save_settings":
             _save_settings(msg.get("settings"))
+            continue
+        if msg_type == "set_personality":
+            personality = str(msg.get("personality", "")).strip().lower()
+            if personality not in {"minerva", "jarvis"}:
+                emit_error("Personalidad desconocida")
+                continue
+            if VOICE_AVAILABLE:
+                voice_mgr.set_wake_word(personality)
+            emit({"type": "personality_changed", "personality": personality})
             continue
         if msg_type == "run_confirmed":
             job = job_mgr.claim(

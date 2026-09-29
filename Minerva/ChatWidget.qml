@@ -478,7 +478,7 @@ Item {
                     anchors.verticalCenter: parent.verticalCenter
                     spacing: 2
                     Text {
-                        text: "Minerva"
+                        text: root.aiWidget ? root.aiWidget.assistantName : "Minerva"
                         font.family: Theme.fontSans
                         font.pixelSize: 13
                         font.weight: Font.Bold
@@ -938,7 +938,11 @@ Item {
                     spacing: 12; opacity: 1
                     Text { text: "󱜚"; font.family: Theme.fontMono; font.pixelSize: 46; color: Theme.accent; horizontalAlignment: Text.AlignHCenter; anchors.horizontalCenter: parent.horizontalCenter }
                     Text {
-                        text: root.aiWidget && root.aiWidget.backendReady ? "¿En qué puedo ayudarte?" : "Iniciando Minerva…"
+                        text: root.aiWidget && root.aiWidget.backendReady
+                            ? (root.aiWidget.activePersonality === "jarvis"
+                                ? "¿En qué puedo asistirle?"
+                                : "¿En qué puedo ayudarte?")
+                            : "Iniciando " + (root.aiWidget ? root.aiWidget.assistantName : "Minerva") + "…"
                         font.family: Theme.fontSans; font.pixelSize: 13; color: Theme.textMuted
                         horizontalAlignment: Text.AlignHCenter; anchors.horizontalCenter: parent.horizontalCenter
                     }
