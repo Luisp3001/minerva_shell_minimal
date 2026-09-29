@@ -215,6 +215,7 @@ Ejemplo de asignación de teclas rápidas recomendadas:
 | `Super + M` | Asistente Minerva | `quickshell ipc call shell toggleMinerva` |
 | `Super + Shift + M` | Ajustes de Minerva | `quickshell ipc call shell openMinervaSettings` |
 | `Super + C` | Centro de Control | `quickshell ipc call shell toggleControlCenter` |
+| `Super + Shift + C` | Calendario Dinámico | `quickshell ipc call shell toggleCalendar` |
 | `Super + W` | Selector de Fondos | `quickshell ipc call shell toggleWallpaper` |
 | `Super + Escape` | Menú de Energía | `quickshell ipc call shell togglePowerMenu` |
 | `Super + Shift + S` | Captura de Pantalla | `quickshell ipc call shell launchScreenshot` |
@@ -268,7 +269,8 @@ minerva_shell/
 │   ├── WifiPanel.qml             # Panel de selección y conexión Wi-Fi
 │   ├── BluetoothPanel.qml        # Panel de dispositivos Bluetooth
 │   ├── MediaWidget.qml           # Widget de reproducción multimedia
-│   ├── ClockCalendar.qml         # Widget de reloj y vista de calendario
+│   ├── ClockCalendar.qml         # Widget de reloj y tira semanal en Dynamic Island
+│   ├── CalendarView.qml          # Vista completa de calendario mensual y anual interactivo
 │   ├── NotificationToast.qml     # Notificaciones emergentes
 │   ├── NotificationHistory.qml   # Historial persistente de notificaciones
 │   ├── Lock.qml                  # Pantalla de bloqueo nativa Wayland (PAM)

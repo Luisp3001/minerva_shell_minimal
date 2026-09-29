@@ -11,6 +11,8 @@ Item {
 
     property real rightMargin: 24
 
+    signal clicked()
+
     // Reserva únicamente el espacio adicional que pueda necesitar la hora en
     // los extremos de la semana. Así, su centro coincide siempre con el día
     // actual sin que el texto quede recortado.
@@ -42,6 +44,34 @@ Item {
     implicitWidth: leftPadding + daysRow.implicitWidth + rightPadding
     implicitHeight: clockText.implicitHeight + 5 + daysRow.implicitHeight
 
+    // Fondo sutil al posar el cursor sobre el módulo en modo expandido
+    Rectangle {
+        id: hoverBg
+        anchors.fill: parent
+        anchors.topMargin: -4
+        anchors.bottomMargin: -4
+        anchors.leftMargin: -6
+        anchors.rightMargin: -6
+        radius: 12
+        color: (clickArea.containsMouse && root.isExpanded) ? Qt.rgba(1, 1, 1, 0.06) : "transparent"
+        border.color: (clickArea.containsMouse && root.isExpanded) ? Qt.rgba(0.47, 0.82, 0.83, 0.25) : "transparent"
+        border.width: 1
+        opacity: root.isExpanded ? 1 : 0
+        z: -1
+
+        Behavior on color { ColorAnimation { duration: 150 } }
+        Behavior on border.color { ColorAnimation { duration: 150 } }
+        Behavior on opacity { NumberAnimation { duration: 150 } }
+    }
+
+    MouseArea {
+        id: clickArea
+        anchors.fill: parent
+        cursorShape: Qt.PointingHandCursor
+        hoverEnabled: true
+        onClicked: root.clicked()
+    }
+
     // Hora centrada sobre la celda correspondiente al día actual en modo expandido,
     // o morphing hacia el centro de la isla en modo compacto.
     Text {
@@ -56,7 +86,7 @@ Item {
         y: root.isExpanded ? expandedY : compactY
 
         text: Qt.formatDateTime(root.currentDate, "hh:mm")
-        color: "#FFFFFF"
+        color: (clickArea.containsMouse && root.isExpanded) ? "#78d1d3" : "#FFFFFF"
         font.pixelSize: root.isExpanded ? 18 : 16
         font.weight: Font.DemiBold
         font.family: "SF Pro Display, SF Pro, sans-serif"

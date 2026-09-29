@@ -30,9 +30,10 @@ Item {
     property bool minervaOpen: false
     property bool wallpaperOpen: false
     property bool powerMenuOpen: false
+    property bool calendarOpen: false
     property bool suppressHoverUntilExit: false
     readonly property var notification: shellRoot ? shellRoot.notificationPopup : null
-    readonly property bool notificationOpen: notification !== null && !launcherOpen && !controlCenterOpen && !minervaOpen && !wallpaperOpen && !powerMenuOpen
+    readonly property bool notificationOpen: notification !== null && !launcherOpen && !controlCenterOpen && !minervaOpen && !wallpaperOpen && !powerMenuOpen && !calendarOpen
     onNotificationOpenChanged: {
         if (!notificationOpen) {
             root.isExpanded = false
@@ -105,7 +106,7 @@ Item {
     property real osdValue: 0
     property bool osdMuted: false
 
-    readonly property bool osdOpen: osdVisible && !launcherOpen && !controlCenterOpen && !minervaOpen && !wallpaperOpen && !powerMenuOpen && !notificationOpen && !minervaBusy && !isExpanded
+    readonly property bool osdOpen: osdVisible && !launcherOpen && !controlCenterOpen && !minervaOpen && !wallpaperOpen && !powerMenuOpen && !calendarOpen && !notificationOpen && !minervaBusy && !isExpanded
     readonly property int osdIslandWidth: 200
 
     function triggerOsd(type, value, muted) {
@@ -218,7 +219,7 @@ Item {
     property string batteryToastText: ""
     property string batteryToastIcon: "󰂄"
     property color batteryToastColor: "#a6e3a1"
-    readonly property bool batteryToastOpen: batteryToastVisible && !launcherOpen && !controlCenterOpen && !minervaOpen && !wallpaperOpen && !powerMenuOpen && !notificationOpen && !minervaBusy && !osdOpen
+    readonly property bool batteryToastOpen: batteryToastVisible && !launcherOpen && !controlCenterOpen && !minervaOpen && !wallpaperOpen && !powerMenuOpen && !calendarOpen && !notificationOpen && !minervaBusy && !osdOpen
 
     property int lastBatteryState: -1
     property real lastBatteryPct: -1
@@ -291,31 +292,33 @@ Item {
     readonly property int wallpaperHeight: 330
     readonly property int powerMenuWidth: 436
     readonly property int powerMenuHeight: 88
+    readonly property int calendarWidth: 380
+    readonly property int calendarHeight: 400
     readonly property int minervaWaveformIslandWidth: 210
     readonly property int batteryToastIslandWidth: 210
     readonly property bool minervaSettingsOpen: minervaPanelLoader.item ? minervaPanelLoader.item.settingsOpen : false
     readonly property int minervaSettingsHeight: minervaPanelLoader.item ? minervaPanelLoader.item.settingsImplicitHeight : minervaHeight
-    width: powerMenuOpen ? powerMenuWidth : (minervaOpen ? minervaWidth : (wallpaperOpen ? wallpaperWidth : (controlCenterOpen ? controlCenterWidth : (launcherOpen ? launcherWidth : (notificationOpen ? 430 : (isExpanded ? 530 : (minervaBusy ? minervaWaveformIslandWidth : (osdOpen ? osdIslandWidth : (batteryToastOpen ? batteryToastIslandWidth : 140)))))))))
-    height: powerMenuOpen ? powerMenuHeight : (minervaOpen ? (minervaSettingsOpen ? Math.min(minervaHeight, minervaSettingsHeight) : minervaHeight) : (wallpaperOpen ? wallpaperHeight : (controlCenterOpen ? controlCenter.contentHeight : (launcherOpen ? launcher.contentHeight : (notificationOpen ? 92 : (isExpanded ? 110 : 38))))))
-    property real radius: (powerMenuOpen || launcherOpen || controlCenterOpen || minervaOpen || notificationOpen || wallpaperOpen) ? 26 : (isExpanded ? 26 : (height / 2))
+    width: powerMenuOpen ? powerMenuWidth : (calendarOpen ? calendarWidth : (minervaOpen ? minervaWidth : (wallpaperOpen ? wallpaperWidth : (controlCenterOpen ? controlCenterWidth : (launcherOpen ? launcherWidth : (notificationOpen ? 430 : (isExpanded ? 530 : (minervaBusy ? minervaWaveformIslandWidth : (osdOpen ? osdIslandWidth : (batteryToastOpen ? batteryToastIslandWidth : 140))))))))))
+    height: powerMenuOpen ? powerMenuHeight : (calendarOpen ? calendarHeight : (minervaOpen ? (minervaSettingsOpen ? Math.min(minervaHeight, minervaSettingsHeight) : minervaHeight) : (wallpaperOpen ? wallpaperHeight : (controlCenterOpen ? controlCenter.contentHeight : (launcherOpen ? launcher.contentHeight : (notificationOpen ? 92 : (isExpanded ? 110 : 38)))))))
+    property real radius: (powerMenuOpen || launcherOpen || controlCenterOpen || minervaOpen || notificationOpen || wallpaperOpen || calendarOpen) ? 26 : (isExpanded ? 26 : (height / 2))
 
-    property color pillColor: (root.controlCenterOpen || root.minervaOpen || root.wallpaperOpen) ? Qt.rgba(0.035, 0.035, 0.04, 0.96) : '#000000'
-    property color pillBorderColor: (powerMenuOpen || launcherOpen || controlCenterOpen || minervaOpen || notificationOpen || wallpaperOpen) ? "#343135" : (isExpanded ? "#313244" : "#1e1e2e")
+    property color pillColor: (root.controlCenterOpen || root.minervaOpen || root.wallpaperOpen || root.calendarOpen) ? Qt.rgba(0.035, 0.035, 0.04, 0.96) : '#000000'
+    property color pillBorderColor: (powerMenuOpen || launcherOpen || controlCenterOpen || minervaOpen || notificationOpen || wallpaperOpen || calendarOpen) ? "#343135" : (isExpanded ? "#313244" : "#1e1e2e")
 
     // Animación de expansión con rebote dinámico (Apple Dynamic Island style)
     Behavior on width {
         NumberAnimation {
-            duration: (root.powerMenuOpen || root.launcherOpen || root.minervaOpen || root.wallpaperOpen || root.isExpanded || root.notificationOpen || root.minervaBusy || root.batteryToastOpen || root.osdOpen) ? 380 : 250
-            easing.type: (root.powerMenuOpen || root.launcherOpen || root.minervaOpen || root.wallpaperOpen || root.isExpanded || root.notificationOpen || root.minervaBusy || root.batteryToastOpen || root.osdOpen) ? Easing.OutBack : Easing.OutCubic
-            easing.overshoot: (root.powerMenuOpen || root.launcherOpen || root.minervaOpen || root.wallpaperOpen || root.isExpanded || root.notificationOpen || root.minervaBusy || root.batteryToastOpen || root.osdOpen) ? 1.15 : 0.0
+            duration: (root.powerMenuOpen || root.launcherOpen || root.minervaOpen || root.wallpaperOpen || root.calendarOpen || root.isExpanded || root.notificationOpen || root.minervaBusy || root.batteryToastOpen || root.osdOpen) ? 380 : 250
+            easing.type: (root.powerMenuOpen || root.launcherOpen || root.minervaOpen || root.wallpaperOpen || root.calendarOpen || root.isExpanded || root.notificationOpen || root.minervaBusy || root.batteryToastOpen || root.osdOpen) ? Easing.OutBack : Easing.OutCubic
+            easing.overshoot: (root.powerMenuOpen || root.launcherOpen || root.minervaOpen || root.wallpaperOpen || root.calendarOpen || root.isExpanded || root.notificationOpen || root.minervaBusy || root.batteryToastOpen || root.osdOpen) ? 1.15 : 0.0
         }
     }
 
     Behavior on height {
         NumberAnimation {
-            duration: (root.powerMenuOpen || root.launcherOpen || root.minervaOpen || root.wallpaperOpen || root.isExpanded || root.notificationOpen) ? 380 : 250
-            easing.type: (root.powerMenuOpen || root.launcherOpen || root.minervaOpen || root.wallpaperOpen || root.isExpanded || root.notificationOpen) ? Easing.OutBack : Easing.OutCubic
-            easing.overshoot: (root.powerMenuOpen || root.launcherOpen || root.minervaOpen || root.wallpaperOpen || root.isExpanded || root.notificationOpen) ? 1.15 : 0.0
+            duration: (root.powerMenuOpen || root.launcherOpen || root.minervaOpen || root.wallpaperOpen || root.calendarOpen || root.isExpanded || root.notificationOpen) ? 380 : 250
+            easing.type: (root.powerMenuOpen || root.launcherOpen || root.minervaOpen || root.wallpaperOpen || root.calendarOpen || root.isExpanded || root.notificationOpen) ? Easing.OutBack : Easing.OutCubic
+            easing.overshoot: (root.powerMenuOpen || root.launcherOpen || root.minervaOpen || root.wallpaperOpen || root.calendarOpen || root.isExpanded || root.notificationOpen) ? 1.15 : 0.0
         }
     }
 
@@ -334,7 +337,7 @@ Item {
         ColorAnimation { duration: 180 }
     }
 
-    // ── Funciones de control del Launcher / Centro de control / Minerva / Wallpaper ──
+    // ── Funciones de control del Launcher / Centro de control / Minerva / Wallpaper / Calendario ──
     function openLauncher() {
         collapseTimer.stop()
         root.suppressHoverUntilExit = false
@@ -346,6 +349,8 @@ Item {
             closeWallpaper()
         if (root.powerMenuOpen)
             closePowerMenu()
+        if (root.calendarOpen)
+            closeCalendar()
         root.launcherOpen = true
         launcher.open()
     }
@@ -374,6 +379,8 @@ Item {
             closeWallpaper()
         if (root.powerMenuOpen)
             closePowerMenu()
+        if (root.calendarOpen)
+            closeCalendar()
         root.controlCenterOpen = true
         controlCenter.open()
     }
@@ -397,6 +404,7 @@ Item {
         if (root.controlCenterOpen) closeControlCenter()
         if (root.wallpaperOpen) closeWallpaper()
         if (root.powerMenuOpen) closePowerMenu()
+        if (root.calendarOpen) closeCalendar()
         root.minervaOpen = true
         Qt.callLater(function() {
             if (minervaPanelLoader.item) minervaPanelLoader.item.takeFocus()
@@ -429,6 +437,7 @@ Item {
         if (root.controlCenterOpen) closeControlCenter()
         if (root.minervaOpen) closeMinerva()
         if (root.powerMenuOpen) closePowerMenu()
+        if (root.calendarOpen) closeCalendar()
         root.wallpaperOpen = true
         Qt.callLater(function() {
             if (wallpaperPanelLoader.item)
@@ -456,6 +465,7 @@ Item {
         if (root.controlCenterOpen) closeControlCenter()
         if (root.minervaOpen) closeMinerva()
         if (root.wallpaperOpen) closeWallpaper()
+        if (root.calendarOpen) closeCalendar()
         root.powerMenuOpen = true
         Qt.callLater(function() {
             if (powerMenuPanelLoader.item)
@@ -472,6 +482,32 @@ Item {
     function togglePowerMenu() {
         if (root.powerMenuOpen) closePowerMenu()
         else openPowerMenu()
+    }
+
+    function openCalendar() {
+        collapseTimer.stop()
+        root.suppressHoverUntilExit = false
+        if (root.launcherOpen) closeLauncher()
+        if (root.controlCenterOpen) closeControlCenter()
+        if (root.minervaOpen) closeMinerva()
+        if (root.wallpaperOpen) closeWallpaper()
+        if (root.powerMenuOpen) closePowerMenu()
+        root.calendarOpen = true
+        Qt.callLater(function() {
+            if (calendarPanelLoader.item)
+                calendarPanelLoader.item.open()
+        })
+    }
+
+    function closeCalendar() {
+        root.calendarOpen = false
+        root.isExpanded = false
+        root.suppressHoverUntilExit = true
+    }
+
+    function toggleCalendar() {
+        if (root.calendarOpen) closeCalendar()
+        else openCalendar()
     }
 
     // ── Sombra sutil inferior para dar profundidad 3D ───────────────────────
@@ -511,12 +547,20 @@ Item {
         border.width: 1
         clip: true
 
+    // Click en la píldora compacta para abrir el calendario directamente
+    MouseArea {
+        anchors.fill: parent
+        enabled: !root.isExpanded && !root.launcherOpen && !root.controlCenterOpen && !root.minervaOpen && !root.wallpaperOpen && !root.powerMenuOpen && !root.calendarOpen && !root.notificationOpen && !root.minervaBusy && !root.batteryToastOpen && !root.osdOpen
+        cursorShape: Qt.PointingHandCursor
+        onClicked: root.toggleCalendar()
+    }
+
     // ── 1. VISTA DE MÚSICA (Izquierda - solo visible al expandir en hover) ────
     MediaWidget {
         anchors.left: parent.left
         anchors.leftMargin: 16
         anchors.verticalCenter: parent.verticalCenter
-        opacity: (root.isExpanded && !root.launcherOpen && !root.controlCenterOpen && !root.minervaOpen && !root.notificationOpen && !root.wallpaperOpen && !root.powerMenuOpen) ? 1 : 0
+        opacity: (root.isExpanded && !root.calendarOpen && !root.launcherOpen && !root.controlCenterOpen && !root.minervaOpen && !root.notificationOpen && !root.wallpaperOpen && !root.powerMenuOpen) ? 1 : 0
         visible: opacity > 0
 
         Behavior on opacity {
@@ -534,7 +578,8 @@ Item {
         islandWidth: root.width
         islandHeight: root.height
         rightMargin: 24
-        opacity: (root.powerMenuOpen || root.launcherOpen || root.controlCenterOpen || root.minervaOpen || root.notificationOpen || root.wallpaperOpen || (root.minervaBusy && !root.isExpanded) || root.batteryToastOpen || root.osdOpen) ? 0 : 1
+        onClicked: root.toggleCalendar()
+        opacity: (root.calendarOpen || root.powerMenuOpen || root.launcherOpen || root.controlCenterOpen || root.minervaOpen || root.notificationOpen || root.wallpaperOpen || (root.minervaBusy && !root.isExpanded) || root.batteryToastOpen || root.osdOpen) ? 0 : 1
         visible: opacity > 0
 
         Behavior on opacity {
@@ -621,6 +666,26 @@ Item {
                 shellRoot: root.shellRoot
                 active: root.powerMenuOpen
                 onCloseRequested: root.closePowerMenu()
+            }
+        }
+
+        Behavior on opacity {
+            NumberAnimation { duration: 180; easing.type: Easing.OutCubic }
+        }
+    }
+
+    // ── 8. VISTA DE CALENDARIO EXPANDIDA ──────────────────────────────
+    Loader {
+        id: calendarPanelLoader
+        anchors.fill: parent
+        active: root.calendarOpen
+        opacity: root.calendarOpen ? 1 : 0
+        visible: opacity > 0
+        sourceComponent: Component {
+            CalendarView {
+                currentDate: root.currentDate
+                active: root.calendarOpen
+                onCloseRequested: root.closeCalendar()
             }
         }
 
@@ -894,9 +959,9 @@ Item {
     // ── 11. DETECCIÓN DE HOVER SIN CONSUMIR CLICKS (HoverHandler) ────────────
     HoverHandler {
         id: islandHover
-        enabled: !root.launcherOpen && !root.controlCenterOpen && !root.minervaOpen && !root.notificationOpen && !root.wallpaperOpen && !root.powerMenuOpen
+        enabled: !root.launcherOpen && !root.controlCenterOpen && !root.minervaOpen && !root.notificationOpen && !root.wallpaperOpen && !root.powerMenuOpen && !root.calendarOpen
         onHoveredChanged: {
-            if (root.launcherOpen || root.controlCenterOpen || root.minervaOpen || root.notificationOpen || root.wallpaperOpen || root.powerMenuOpen) return
+            if (root.launcherOpen || root.controlCenterOpen || root.minervaOpen || root.notificationOpen || root.wallpaperOpen || root.powerMenuOpen || root.calendarOpen) return
             if (hovered) {
                 if (!root.suppressHoverUntilExit) {
                     collapseTimer.stop()
@@ -914,7 +979,7 @@ Item {
         interval: 220
         repeat: false
         onTriggered: {
-            if (!root.launcherOpen && !root.controlCenterOpen && !root.minervaOpen && !root.notificationOpen && !root.wallpaperOpen && !root.powerMenuOpen && !islandHover.hovered) {
+            if (!root.launcherOpen && !root.controlCenterOpen && !root.minervaOpen && !root.notificationOpen && !root.wallpaperOpen && !root.powerMenuOpen && !root.calendarOpen && !islandHover.hovered) {
                 root.isExpanded = false
             }
         }

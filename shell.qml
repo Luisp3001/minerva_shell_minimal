@@ -175,6 +175,35 @@ ShellRoot {
             }
         }
 
+        function toggleCalendar() {
+            for (let i = 0; i < variantsModel.instances.length; i++) {
+                let inst = variantsModel.instances[i]
+                if (inst && inst.islandRef) {
+                    inst.islandRef.toggleCalendar()
+                    break
+                }
+            }
+        }
+
+        function openCalendar() {
+            for (let i = 0; i < variantsModel.instances.length; i++) {
+                let inst = variantsModel.instances[i]
+                if (inst && inst.islandRef) {
+                    inst.islandRef.openCalendar()
+                    break
+                }
+            }
+        }
+
+        function closeCalendar() {
+            for (let i = 0; i < variantsModel.instances.length; i++) {
+                let inst = variantsModel.instances[i]
+                if (inst && inst.islandRef) {
+                    inst.islandRef.closeCalendar()
+                }
+            }
+        }
+
         function lockscreen() {
             Quickshell.execDetached(["qs", "-p", Quickshell.env("HOME") + "/.config/minerva_shell/components/Lock.qml"]);
         }
@@ -246,7 +275,7 @@ ShellRoot {
                     // Foco de teclado en Wayland: exclusivo solo cuando el launcher esté desplegado
                     // El centro no secuestra el foco global. OnDemand permite
                     // escribir contraseñas solo después de pulsar su campo.
-                    WlrLayershell.keyboardFocus: (island.launcherOpen || island.minervaOpen || island.wallpaperOpen || island.powerMenuOpen)
+                    WlrLayershell.keyboardFocus: (island.launcherOpen || island.minervaOpen || island.wallpaperOpen || island.powerMenuOpen || island.calendarOpen)
                         ? WlrKeyboardFocus.Exclusive
                         : (island.controlCenterOpen ? WlrKeyboardFocus.OnDemand : WlrKeyboardFocus.None)
 
@@ -278,7 +307,7 @@ ShellRoot {
                         anchors.right: island.left
                         anchors.rightMargin: 8
                         anchors.top: island.top
-                        suppressed: island.isExpanded || island.launcherOpen || island.controlCenterOpen || island.minervaOpen || island.notificationOpen || island.wallpaperOpen || island.powerMenuOpen
+                        suppressed: island.isExpanded || island.launcherOpen || island.controlCenterOpen || island.minervaOpen || island.notificationOpen || island.wallpaperOpen || island.powerMenuOpen || island.calendarOpen
                     }
                 }
             }
