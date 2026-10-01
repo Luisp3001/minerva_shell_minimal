@@ -5,3 +5,4 @@ Minerva/voice/
 Caelestia
 !/plugin/src/Caelestia
 build/
+tests/
