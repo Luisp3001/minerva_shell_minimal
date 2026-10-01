@@ -71,5 +71,5 @@ VOICE_AVAILABLE = _available(
     "pywhispercpp.model",
 )
 VOSK_AVAILABLE = _available("vosk")
-FISH_AUDIO_AVAILABLE = _available("fish_audio_sdk")
+FISH_AUDIO_AVAILABLE = _available("fish_audio_sdk") or _available("fishaudio")
 GEMINI_TTS_AVAILABLE = _available("google.genai")

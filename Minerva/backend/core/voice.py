@@ -161,6 +161,11 @@ class VoiceManager:
         self._initialization_started = False
         self._initialization_lock = threading.Lock()
 
+        # Hook del modo Live: cuando no es None, audio_callback reenvía cada
+        # chunk de PCM al live session (evita abrir un segundo RawInputStream).
+        self.live_audio_sink = None
+
+
         self.piper_voice = None
 
         # ── Proveedor TTS ──────────────────────────────────────────────────────
@@ -649,7 +654,46 @@ class VoiceManager:
         except Exception as e:
             print(f"Error en wake word stream: {e}", file=sys.stderr)
 
+    def ensure_mic_active(self):
+        """Asegura que el micrófono esté capturando audio."""
+        if getattr(self, "wake_word_thread", None) and self.wake_word_thread.is_alive():
+            return
+        if getattr(self, "stream", None) and getattr(self.stream, "active", False):
+            return
+        if sd is not None:
+            try:
+                self.stream = sd.RawInputStream(
+                    samplerate=16000, blocksize=320, dtype='int16',
+                    channels=1, callback=self.audio_callback
+                )
+                self.stream.start()
+                print("[VoiceManager] Stream de micrófono iniciado para modo Live.", file=sys.stderr)
+            except Exception as e:
+                print(f"[VoiceManager] Error iniciando micrófono: {e}", file=sys.stderr)
+
     def audio_callback(self, indata, frames, time_info, status):
+        # ── Reenvío al Live session (siempre, independiente del estado STT) ──
+        if self.live_audio_sink is not None:
+            try:
+                self.live_audio_sink(bytes(indata))
+            except Exception:
+                pass
+            # Emitir métricas para el waveform en modo Live (mic input) solo si el TTS no está hablando
+            try:
+                from .live_session import live_session
+                live_speaking = getattr(live_session, 'is_speaking', False)
+            except Exception:
+                live_speaking = False
+
+            if not getattr(self, 'is_speaking', False) and not live_speaking:
+                if np is not None:
+                    audio_np_live = (
+                        np.frombuffer(indata, dtype=np.int16).astype(np.float32)
+                        / 32768.0
+                    )
+                    metrics = self.analyzer.analyze(audio_np_live, 16000)
+                    emit({"type": "audio_data", "source": "mic", **metrics})
+
         if self.is_recording:
             if self.recording_limit_reached:
                 return
@@ -664,8 +708,9 @@ class VoiceManager:
                 emit({"type": "silence_detected"})
 
             # Emitir métricas de audio del micrófono para el Minerva_waveform
-            metrics = self.analyzer.analyze(audio_np, 16000)
-            emit({"type": "audio_data", "source": "mic", **metrics})
+            if self.live_audio_sink is None:  # ya se emitió arriba si Live está activo
+                metrics = self.analyzer.analyze(audio_np, 16000)
+                emit({"type": "audio_data", "source": "mic", **metrics})
 
             if self.vosk_recognizer:
                 is_final = self.vosk_recognizer.AcceptWaveform(bytes(indata))
@@ -697,6 +742,7 @@ class VoiceManager:
                 if not self.is_recording:
                     self.vosk_recognizer.Reset()
                     emit({"type": "wake_word_detected"})
+
 
     # ── Grabación / Transcripción ─────────────────────────────────────────────
 

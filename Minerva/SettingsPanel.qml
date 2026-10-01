@@ -9,6 +9,7 @@ Item {
     property string draftTtsProvider: "fish"
     property string draftTtsModel: ""
     property string draftGeminiVoice: "Kore"
+    property bool   draftLiveMode: false
     signal closeRequested()
 
     readonly property int contentHeight: settingsHeader.height + settingsContent.implicitHeight + 48
@@ -48,6 +49,7 @@ Item {
         draftTextModel = aiWidget.geminiModel
         draftTtsProvider = aiWidget.ttsProvider
         draftGeminiVoice = aiWidget.geminiTtsVoice
+        draftLiveMode = aiWidget.liveMode
         if (draftTtsProvider === "fish")
             draftTtsModel = aiWidget.fishModel
         else if (draftTtsProvider === "gemini")
@@ -73,6 +75,7 @@ Item {
         var ttsModel = draftTtsModel.trim()
         if (textModel) aiWidget.geminiModel = textModel
         aiWidget.personality = draftPersonality
+        aiWidget.liveMode = draftLiveMode
         // Jarvis usa su perfil Fish fijo; la configuración de Minerva se
         // conserva intacta para cuando el usuario vuelva a seleccionarla.
         if (draftPersonality === "minerva") {
@@ -245,6 +248,85 @@ Item {
                         font.pixelSize: 11
                         color: Theme.textMuted
                         wrapMode: Text.Wrap
+                    }
+                }
+
+                // ── Modo Live (solo JARVIS) ───────────────────────────────────
+                Column {
+                    width: parent.width
+                    spacing: 10
+                    visible: root.draftPersonality === "jarvis"
+
+                    Rectangle { width: parent.width; height: 1; color: Qt.rgba(1,1,1,0.07) }
+
+                    Text {
+                        text: "⚡ Modo Live"
+                        font.family: Theme.fontSans
+                        font.pixelSize: 13
+                        font.weight: Font.Bold
+                        color: root.draftLiveMode ? Theme.accent : Theme.textPrimary
+                        Behavior on color { ColorAnimation { duration: 200 } }
+                    }
+
+                    Text {
+                        width: parent.width
+                        text: "Conversación en tiempo real usando Gemini Live API y Fish Audio WebSocket. El wake word \"Jarvis\" activa la sesión Live directamente."
+                        font.family: Theme.fontSans
+                        font.pixelSize: 11
+                        color: Theme.textMuted
+                        wrapMode: Text.Wrap
+                    }
+
+                    // Toggle ON/OFF
+                    Rectangle {
+                        width: 56; height: 28
+                        radius: 14
+                        color: root.draftLiveMode
+                            ? Qt.rgba(Theme.accent.r, Theme.accent.g, Theme.accent.b, 0.25)
+                            : Qt.rgba(1, 1, 1, 0.07)
+                        border.width: 1
+                        border.color: root.draftLiveMode ? Theme.accent : Qt.rgba(1,1,1,0.15)
+                        Behavior on color { ColorAnimation { duration: 200 } }
+                        Behavior on border.color { ColorAnimation { duration: 200 } }
+
+                        Rectangle {
+                            id: liveToggleKnob
+                            width: 20; height: 20
+                            radius: 10
+                            color: root.draftLiveMode ? Theme.accent : Qt.rgba(1,1,1,0.5)
+                            anchors.verticalCenter: parent.verticalCenter
+                            x: root.draftLiveMode ? parent.width - width - 4 : 4
+                            Behavior on x     { NumberAnimation { duration: 200; easing.type: Easing.OutCubic } }
+                            Behavior on color { ColorAnimation { duration: 200 } }
+                        }
+
+                        MouseArea {
+                            anchors.fill: parent
+                            cursorShape: Qt.PointingHandCursor
+                            onClicked: root.draftLiveMode = !root.draftLiveMode
+                        }
+                    }
+
+                    // Aviso cuando está activo
+                    Rectangle {
+                        width: parent.width
+                        height: liveModeNote.implicitHeight + 18
+                        radius: 12
+                        visible: root.draftLiveMode
+                        color: Qt.rgba(0.06, 0.55, 0.56, 0.12)
+                        border.width: 1
+                        border.color: Qt.rgba(Theme.accent.r, Theme.accent.g, Theme.accent.b, 0.3)
+
+                        Text {
+                            id: liveModeNote
+                            anchors { left: parent.left; right: parent.right;
+                                      verticalCenter: parent.verticalCenter; margins: 10 }
+                            text: "⚡ Di \"Jarvis\" para iniciar una sesión de voz en tiempo real. La sesión se cierra automáticamente tras 2 minutos de inactividad."
+                            font.family: Theme.fontSans
+                            font.pixelSize: 10
+                            color: Theme.accent
+                            wrapMode: Text.Wrap
+                        }
                     }
                 }
 

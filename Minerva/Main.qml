@@ -31,6 +31,10 @@ Item {
     readonly property string effectiveTtsProvider: activePersonality === "jarvis" ? "fish" : ttsProvider
     readonly property string effectiveFishVoiceId: activePersonality === "jarvis" ? jarvisFishVoiceId : fishVoiceId
 
+    // ── Modo Live (JARVIS exclusivo) ──────────────────────────────────────────
+    property bool   liveMode:          false   // true = Gemini Live + Fish Audio WS
+    property bool   isLiveSessionActive: false  // sesión Live en curso
+
     // Los secretos permanecen fuera del repositorio. El formato preferido es
     // ~/.config/minerva/settings.json; durante la transición también se lee la
     // configuración del gestor de plugins del shell anterior.
@@ -49,6 +53,7 @@ Item {
         if (settings.fishModel !== undefined)      fishModel = settings.fishModel
         if (settings.geminiTtsVoice !== undefined) geminiTtsVoice = settings.geminiTtsVoice
         if (settings.geminiTtsModel !== undefined) geminiTtsModel = settings.geminiTtsModel
+        if (settings.liveMode !== undefined)       liveMode = (settings.liveMode === true || settings.liveMode === "true")
         if (backendReady)
             sendToBackend({ type: "set_personality", personality: widget.activePersonality })
     }
@@ -65,7 +70,8 @@ Item {
             fishVoiceId: widget.fishVoiceId,
             fishModel: widget.fishModel,
             geminiTtsVoice: widget.geminiTtsVoice,
-            geminiTtsModel: widget.geminiTtsModel
+            geminiTtsModel: widget.geminiTtsModel,
+            liveMode: widget.liveMode
         }
         sendToBackend({ type: "save_settings", settings: data })
         sendToBackend({ type: "set_personality", personality: widget.activePersonality })
@@ -498,10 +504,18 @@ Item {
                 resolveApproval(msg.job_id || "")
                 break
             case "wake_word_detected":
-                if (!isRecording) {
-                    toggleVoice()
+                if (isLiveSessionActive) {
+                    // En modo Live el wake word inicia un nuevo turno (barge-in)
+                    sendToBackend({type: "live_barge_in"})
+                } else if (!isRecording) {
+                    if (activePersonality === "jarvis" && liveMode) {
+                        // JARVIS con modo Live: activar sesión Live
+                        startLiveSession()
+                    } else {
+                        toggleVoice()
+                    }
                 }
-                break
+                break;
             case "silence_detected":
                 if (isRecording) {
                     toggleVoice()
@@ -560,6 +574,81 @@ Item {
                     widget.shellRoot.audioBand3 = msg.band3 || 0.0
                 }
                 break
+
+            // ── Eventos de sesión Live ──────────────────────────────────────
+            case "live_session_started":
+                isLiveSessionActive = true
+                isRecording = true  // el mic está abierto
+                _updateMinervaState()
+                break
+            case "live_session_stopped":
+                isLiveSessionActive = false
+                isRecording = false
+                isThinking = false
+                _updateMinervaState()
+                break
+            case "live_session_timeout":
+                isLiveSessionActive = false
+                isRecording = false
+                isThinking = false
+                _updateMinervaState()
+                appendDisplayMessage({
+                    role: "ai",
+                    content: "[ Sesión Live cerrada: " + (msg.reason || "inactividad") + " ]",
+                    command: "", cmdStatus: "", jobId: "",
+                    needsConfirm: false, needsSudo: false, isSystem: true
+                })
+            case "live_user_prompt":
+                // Transcripción de lo que dijo el usuario en modo Live
+                if (msg.text) {
+                    appendDisplayMessage({
+                        role: "user", content: msg.text, command: "", cmdStatus: "",
+                        needsConfirm: false, needsSudo: false, isSystem: false
+                    })
+                    conversationHistory.push({ role: "user", content: msg.text })
+                    if (conversationHistory.length > maxHistoryMessages) {
+                        conversationHistory = conversationHistory.slice(-maxHistoryMessages)
+                    }
+                }
+                break
+            case "live_turn_started":
+                isThinking = true
+                _updateMinervaState()
+                break
+            case "live_turn_done":
+                // Fin de turno JARVIS: guardar en historial
+                tokenFlushTimer.stop()
+                flushPendingTokens()
+                isThinking = false
+                _updateMinervaState()
+                if (msg.full_response) {
+                    conversationHistory.push(
+                        { role: "assistant", content: msg.full_response }
+                    )
+                    if (conversationHistory.length > maxHistoryMessages) {
+                        conversationHistory = conversationHistory.slice(-maxHistoryMessages)
+                    }
+                    var llines = msg.full_response.split("\n")
+                    for (var li = 0; li < llines.length; li++) {
+                        var ll = llines[li].trim()
+                        if (ll && !ll.startsWith("TOOL_CALL:")) {
+                            lastAISnippet = ll.length > 40 ? ll.substring(0, 40) + "…" : ll
+                            break
+                        }
+                    }
+                    streamingIdx = -1
+                    streamingRaw = ""
+                }
+                break
+            case "live_barge_in":
+                // Usuario interrumpió: limpiar burbuja de streaming en curso
+                tokenFlushTimer.stop()
+                pendingTokenBuffer = ""
+                streamingIdx = -1
+                streamingRaw = ""
+                isThinking = false
+                _updateMinervaState()
+                break
         }
         // Reenviar a ChatWidget
         widget.backendMessage(msg)
@@ -600,6 +689,37 @@ Item {
     function cancelJob(jobId)       { sendToBackend({ type: "job_cancelled", job_id: jobId || "" }) }
     function toggleVoice()          { sendToBackend({ type: "toggle_voice" }) }
     function stopTTS()              { sendToBackend({ type: "stop_tts" }) }
+
+    function startLiveSession() {
+        if (isLiveSessionActive) return
+        if (activePersonality !== "jarvis") {
+            console.warn("Minerva: modo Live solo disponible con JARVIS")
+            return
+        }
+        sendToBackend({
+            type: "live_start",
+            settings: {
+                personality:    "jarvis",
+                gemini_api_key: widget.geminiApiKey,
+                gemini_model:   widget.geminiModel,
+                fish_api_key:   widget.fishApiKey,
+                fish_voice_id:  widget.jarvisFishVoiceId,
+                fish_model:     widget.fishModel
+            }
+        })
+        // Añadir entrada al chat indicando inicio de sesión Live
+        appendDisplayMessage({
+            role: "ai",
+            content: "[ Sesión JARVIS Live iniciada — habla cuando quieras ]",
+            command: "", cmdStatus: "", jobId: "",
+            needsConfirm: false, needsSudo: false, isSystem: true
+        })
+    }
+
+    function stopLiveSession() {
+        if (!isLiveSessionActive) return
+        sendToBackend({ type: "live_stop", reason: "manual" })
+    }
 
     // ── IPC Handler (qs ipc call minerva) ─────────────────────────────────
     IpcHandler {

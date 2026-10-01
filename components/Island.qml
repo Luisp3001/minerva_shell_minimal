@@ -42,7 +42,8 @@ Item {
     }
     readonly property bool minervaBusy: minervaService && (
         minervaService.isRecording || minervaService.isTranscribing ||
-        minervaService.isThinking || minervaService.isSpeaking)
+        minervaService.isThinking || minervaService.isSpeaking ||
+        minervaService.isLiveSessionActive)
 
     // ── Recordatorio Sutil y Periódico de Tarea Pendiente (Anti-Ansiedad) ─
     readonly property bool hasMinervaPendingTasks: minervaService ? minervaService.hasPendingTasks : false
@@ -715,6 +716,7 @@ Item {
 
         Minerva.Minerva_waveform {
             anchors.fill: parent
+            isLiveSession: root.minervaService ? root.minervaService.isLiveSessionActive : false
             isRecording: root.minervaService ? root.minervaService.isRecording : false
             isTranscribing: root.minervaService ? root.minervaService.isTranscribing : false
             isThinking: root.minervaService ? root.minervaService.isThinking : false

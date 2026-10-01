@@ -45,6 +45,7 @@ from backend.core.tasks_db import (
     init_db,
     renew_recurring_tasks,
 )
+from backend.core.live_session import live_session
 from backend.core.voice import VOICE_AVAILABLE, voice_mgr
 from backend.tools import FISH_AUDIO_EMOTION_PROMPT, get_system_prompt
 
@@ -74,6 +75,7 @@ _SETTING_KEYS = {
     "geminiTtsVoice",
     "personality",
     "ttsProvider",
+    "liveMode",
 }
 _CHAT_SETTING_KEYS = {
     "fish_api_key",
@@ -87,6 +89,7 @@ _CHAT_SETTING_KEYS = {
     "provider",
     "temperature",
     "tts_provider",
+    "live_mode",
 }
 
 msg_queue: queue.Queue[str | dict] = queue.Queue(maxsize=64)
@@ -825,6 +828,104 @@ def _save_settings(value: object) -> None:
             pathlib.Path(temp_name).unlink(missing_ok=True)
 
 
+def _build_live_system_prompt(settings: dict) -> str:
+    """Construye el system prompt de JARVIS inyectando memoria y tareas pendientes."""
+    now_text = datetime.datetime.now().strftime("%A, %d de %B de %Y, %H:%M")
+    system_prompt = get_system_prompt("jarvis").replace("{fecha_actual}", now_text)
+    system_prompt += FISH_AUDIO_EMOTION_PROMPT  # JARVIS siempre usa Fish Audio
+
+    memories = get_memory_context()
+    if memories:
+        system_prompt += f"\n\n## Memoria del usuario\n{memories}"
+
+    try:
+        pending = get_pending_tasks(report_error=False) or []
+        now = datetime.datetime.now()
+        upcoming = [
+            task for task in pending
+            if not task.get("due_date")
+            or task["due_date"] - now <= datetime.timedelta(days=7)
+        ]
+        if upcoming:
+            tasks_text = "\n".join(
+                f"- [ID: {task['id']}] {task['description']} "
+                f"(Vence: {task.get('due_date') or 'N/A'})"
+                for task in upcoming
+            )
+            system_prompt += (
+                "\n\n## Tareas pendientes del usuario:\n"
+                f"{tasks_text}\n\n"
+                "Menciónalas solo cuando aporten valor."
+            )
+    except Exception as exc:
+        print(
+            f"Minerva Live: no se pudieron cargar tareas: {type(exc).__name__}",
+            file=sys.stderr,
+        )
+
+    return system_prompt
+
+
+def _start_live_session(msg: dict) -> None:
+    """Handler del mensaje IPC 'live_start'."""
+    settings = msg.get("settings", {})
+    if not isinstance(settings, dict):
+        emit_error("live_start: settings debe ser un objeto")
+        return
+
+    personality = str(settings.get("personality", "")).strip().lower()
+    if personality != "jarvis":
+        emit_error("El modo Live solo está disponible con el perfil JARVIS.")
+        return
+
+    if live_session.is_active:
+        emit_error("Ya hay una sesión Live activa.")
+        return
+
+    gemini_api_key = str(settings.get("gemini_api_key", "")).strip()
+    gemini_model   = str(settings.get("gemini_model",   "gemini-2.5-flash")).strip()
+    fish_api_key   = str(settings.get("fish_api_key",   "")).strip()
+    fish_voice_id  = str(settings.get("fish_voice_id",  "")).strip()
+    fish_model     = str(settings.get("fish_model",     "s2-pro")).strip()
+
+    if not gemini_api_key:
+        emit_error("live_start: se requiere gemini_api_key.")
+        return
+    if not fish_api_key:
+        emit_error("live_start: JARVIS Live requiere fish_api_key.")
+        return
+
+    # Configurar TTS del voice_mgr para que wake word y barge-in funcionen
+    if VOICE_AVAILABLE:
+        voice_mgr.set_wake_word("jarvis")
+        voice_mgr.set_tts_provider(
+            provider="fish",
+            fish_api_key=fish_api_key,
+            fish_voice_id=fish_voice_id,
+            fish_model=fish_model,
+        )
+
+    system_prompt = _build_live_system_prompt(settings)
+
+    live_session.start(
+        gemini_api_key=gemini_api_key,
+        gemini_model=gemini_model,
+        fish_api_key=fish_api_key,
+        fish_voice_id=fish_voice_id,
+        fish_model=fish_model,
+        system_prompt=system_prompt,
+    )
+
+
+def _stop_live_session(reason: str = "manual") -> None:
+    """Handler del mensaje IPC 'live_stop'."""
+    if not live_session.is_active:
+        return
+    live_session.stop(reason=reason)
+    if VOICE_AVAILABLE:
+        voice_mgr.stop_tts()
+
+
 def main() -> None:
     global active_context
 
@@ -924,14 +1025,28 @@ def main() -> None:
         if msg_type == "stop_tts":
             if VOICE_AVAILABLE:
                 voice_mgr.stop_tts()
+            if live_session.is_active:
+                live_session.barge_in()
+            continue
+        if msg_type == "live_barge_in":
+            if live_session.is_active:
+                live_session.barge_in()
             continue
         if msg_type == "toggle_voice":
             _submit_voice_toggle()
+            continue
+        if msg_type == "live_start":
+            _start_live_session(msg)
+            continue
+        if msg_type == "live_stop":
+            _stop_live_session(str(msg.get("reason", "manual")))
             continue
         emit_error(f"Tipo de mensaje desconocido: {msg_type!r}")
 
     shutdown_event.set()
     _cancel_active()
+    if live_session.is_active:
+        live_session.stop(reason="shutdown")
     chat_executor.shutdown(wait=False, cancel_futures=True)
     command_executor.shutdown(wait=False, cancel_futures=True)
     transcription_executor.shutdown(wait=False, cancel_futures=True)

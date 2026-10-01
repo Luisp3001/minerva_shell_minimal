@@ -16,6 +16,7 @@ Item {
     property bool isTranscribing: false
     property bool isThinking: false
     property bool isSpeaking: false
+    property bool isLiveSession: false  // Modo Live JARVIS — tint cian
     
     property bool isPendingTask: false
     property bool isUrgentTask: false
@@ -39,8 +40,26 @@ Item {
 
     states: [
         State {
+            name: "live_speaking"
+            when: root.isLiveSession && root.isSpeaking
+            PropertyChanges {
+                target: root
+                stateAmplitude: 0.65; stateSpeed: 2.2; stateOpacity: 1.0
+                tintR: 0.05; tintG: 0.85; tintB: 0.90; tintAmount: 0.70
+            }
+        },
+        State {
+            name: "live"
+            when: root.isLiveSession
+            PropertyChanges {
+                target: root
+                stateAmplitude: 0.38; stateSpeed: 1.2; stateOpacity: 0.90
+                tintR: 0.05; tintG: 0.85; tintB: 0.90; tintAmount: 0.70
+            }
+        },
+        State {
             name: "recording"
-            when: root.isRecording
+            when: root.isRecording && !root.isLiveSession
             PropertyChanges { target: root; stateAmplitude: 0.50; stateSpeed: 1.6; stateOpacity: 1.0; tintAmount: 0.0 }
         },
         State {

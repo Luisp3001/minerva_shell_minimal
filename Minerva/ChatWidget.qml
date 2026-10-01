@@ -1172,31 +1172,78 @@ Item {
                     }
                 }
 
-                // Botón micrófono
+                // Botón micrófono / Live session
                 Rectangle {
+                    id: micBtn
                     width:  42
                     height: 42
                     radius: 21
-                    color: root.aiWidget && root.aiWidget.isRecording
-                        ? Qt.rgba(Theme.danger.r, Theme.danger.g, Theme.danger.b, 0.3)
-                        : (micMa.containsMouse ? Qt.rgba(1, 1, 1, 0.12) : Qt.rgba(1, 1, 1, 0.06))
-                    border.width: 1
-                    border.color: root.aiWidget && root.aiWidget.isRecording ? Theme.danger : Qt.rgba(1, 1, 1, 0.08)
-                    Behavior on color { ColorAnimation { duration: 150 } }
 
+                    // Estado Live activo → cian JARVIS
+                    readonly property bool liveActive:
+                        root.aiWidget && root.aiWidget.isLiveSessionActive
+                    // Grabación normal activa
+                    readonly property bool recActive:
+                        root.aiWidget && root.aiWidget.isRecording && !liveActive
+
+                    color: liveActive
+                        ? Qt.rgba(0.05, 0.65, 0.65, 0.28)
+                        : (recActive
+                            ? Qt.rgba(Theme.danger.r, Theme.danger.g, Theme.danger.b, 0.3)
+                            : (micMa.containsMouse ? Qt.rgba(1, 1, 1, 0.12) : Qt.rgba(1, 1, 1, 0.06)))
+                    border.width: 1
+                    border.color: liveActive
+                        ? Qt.rgba(0.12, 0.85, 0.85, 0.7)
+                        : (recActive ? Theme.danger : Qt.rgba(1, 1, 1, 0.08))
+
+                    Behavior on color       { ColorAnimation { duration: 200 } }
+                    Behavior on border.color { ColorAnimation { duration: 200 } }
+
+                    // Ícono: ⚡ para Live, 󰍬 para mic normal
                     Text {
                         anchors.centerIn: parent
-                        text: "󰍬" // NerdFont mic
-                        font.family: Theme.fontMono
-                        font.pixelSize: 18
-                        color: root.aiWidget && root.aiWidget.isRecording ? Theme.danger : Theme.textMuted
-                        
+                        text: micBtn.liveActive ? "⚡" : "󰍬"
+                        font.family: micBtn.liveActive ? Theme.fontSans : Theme.fontMono
+                        font.pixelSize: micBtn.liveActive ? 17 : 18
+                        color: micBtn.liveActive
+                            ? "#7DF9FF"
+                            : (micBtn.recActive ? Theme.danger : Theme.textMuted)
+
+                        Behavior on color { ColorAnimation { duration: 200 } }
+
+                        // Pulso mientras está activo (Live o grabando)
                         SequentialAnimation on opacity {
-                            running: root.aiWidget && root.aiWidget.isRecording
+                            running: micBtn.liveActive || micBtn.recActive
                             loops: Animation.Infinite
-                            NumberAnimation { to: 0.3; duration: 600 }
-                            NumberAnimation { to: 1.0; duration: 600 }
+                            NumberAnimation { to: micBtn.liveActive ? 0.5 : 0.3; duration: micBtn.liveActive ? 800 : 600 }
+                            NumberAnimation { to: 1.0; duration: micBtn.liveActive ? 800 : 600 }
                             onStopped: opacity = 1.0
+                        }
+                    }
+
+                    // Anillo exterior animado solo en modo Live
+                    Rectangle {
+                        visible: micBtn.liveActive
+                        anchors.centerIn: parent
+                        width: 42; height: 42
+                        radius: 21
+                        color: "transparent"
+                        border.width: 2
+                        border.color: Qt.rgba(0.12, 0.85, 0.85, 0.4)
+
+                        SequentialAnimation on scale {
+                            running: micBtn.liveActive
+                            loops: Animation.Infinite
+                            NumberAnimation { to: 1.35; duration: 1000; easing.type: Easing.OutQuad }
+                            NumberAnimation { to: 1.0;  duration: 1000; easing.type: Easing.InQuad }
+                            onStopped: scale = 1.0
+                        }
+                        SequentialAnimation on opacity {
+                            running: micBtn.liveActive
+                            loops: Animation.Infinite
+                            NumberAnimation { to: 0.0; duration: 1000 }
+                            NumberAnimation { to: 0.7; duration: 1000 }
+                            onStopped: opacity = 0
                         }
                     }
 
@@ -1205,9 +1252,23 @@ Item {
                         anchors.fill: parent
                         hoverEnabled: true
                         cursorShape: Qt.PointingHandCursor
-                        onClicked: if (root.aiWidget) root.aiWidget.toggleVoice()
+                        onClicked: {
+                            if (!root.aiWidget) return
+                            if (micBtn.liveActive) {
+                                // Parar sesión Live
+                                root.aiWidget.stopLiveSession()
+                            } else if (root.aiWidget.activePersonality === "jarvis"
+                                       && root.aiWidget.liveMode) {
+                                // Iniciar sesión Live
+                                root.aiWidget.startLiveSession()
+                            } else {
+                                // STT normal
+                                root.aiWidget.toggleVoice()
+                            }
+                        }
                     }
                 }
+
 
                 // Botón detener TTS (silenciar voz)
                 Rectangle {
