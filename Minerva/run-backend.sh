@@ -13,7 +13,8 @@ if [[ -f "${MINERVA_SETTINGS}" ]]; then
 fi
 for private_file in \
     "${HOME}/.config/minerva/credentials.json" \
-    "${HOME}/.config/minerva/token_cache.json"; do
+    "${HOME}/.config/minerva/token_cache.json" \
+    "${HOME}/.config/minerva/mcp_servers.json"; do
     if [[ -f "${private_file}" ]]; then
         chmod 600 "${private_file}"
     fi

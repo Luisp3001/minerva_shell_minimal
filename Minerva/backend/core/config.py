@@ -30,6 +30,11 @@ HOME     = str(pathlib.Path.home())
 MAX_DIR  = 4_096   # 4 KiB máx por listado de directorio
 
 # ─────────────────────────────────────────────────────────────────────────────
+# MCP (Model Context Protocol)
+# ─────────────────────────────────────────────────────────────────────────────
+MCP_CONFIG_FILE = os.path.join(MINERVA_CONFIG_DIR, "mcp_servers.json")
+
+# ─────────────────────────────────────────────────────────────────────────────
 # Spotify  (ahora dentro de ~/.config/minerva/)
 # ─────────────────────────────────────────────────────────────────────────────
 SPOTIFY_CONFIG_DIR = MINERVA_CONFIG_DIR

@@ -35,6 +35,13 @@ Item {
     property bool   liveMode:          false   // true = Gemini Live + Fish Audio WS
     property bool   isLiveSessionActive: false  // sesión Live en curso
 
+    // ── Servidores Model Context Protocol (MCP) ───────────────────────────────
+    property var    mcpServers: []
+    property bool   mcpLoading: false
+    signal mcpOAuthStarted(string serverId, string authUrl)
+    signal mcpOAuthSuccess(string serverId)
+    signal mcpOAuthError(string serverId, string error)
+
     // Los secretos permanecen fuera del repositorio. El formato preferido es
     // ~/.config/minerva/settings.json; durante la transición también se lee la
     // configuración del gestor de plugins del shell anterior.
@@ -409,6 +416,7 @@ Item {
                 backendReady = true
                 backendRestartAttempts = 0
                 sendToBackend({ type: "set_personality", personality: widget.activePersonality })
+                widget.fetchMcpServers()
                 console.info("Minerva: backend listo (" + (msg.model || "modelo sin nombre") + ")")
                 break
             case "token":
@@ -649,6 +657,20 @@ Item {
                 isThinking = false
                 _updateMinervaState()
                 break
+            // ── Eventos de Servidores MCP ─────────────────────────────────
+            case "mcp_servers_updated":
+                mcpServers = msg.servers || []
+                mcpLoading = false
+                break
+            case "mcp_oauth_started":
+                mcpOAuthStarted(msg.server_id || "", msg.auth_url || "")
+                break
+            case "mcp_oauth_success":
+                mcpOAuthSuccess(msg.server_id || "")
+                break
+            case "mcp_oauth_error":
+                mcpOAuthError(msg.server_id || "", msg.error || "")
+                break
         }
         // Reenviar a ChatWidget
         widget.backendMessage(msg)
@@ -719,6 +741,33 @@ Item {
     function stopLiveSession() {
         if (!isLiveSessionActive) return
         sendToBackend({ type: "live_stop", reason: "manual" })
+    }
+
+    // ── Métodos para Servidores MCP ───────────────────────────────────────
+    function fetchMcpServers() {
+        mcpLoading = true
+        sendToBackend({ type: "mcp_get_servers" })
+    }
+
+    function saveMcpServer(serverData) {
+        mcpLoading = true
+        sendToBackend({ type: "mcp_save_server", server: serverData })
+    }
+
+    function deleteMcpServer(serverId) {
+        sendToBackend({ type: "mcp_delete_server", server_id: serverId })
+    }
+
+    function toggleMcpServer(serverId, enabled) {
+        sendToBackend({ type: "mcp_toggle_server", server_id: serverId, enabled: enabled })
+    }
+
+    function testMcpServer(serverId) {
+        sendToBackend({ type: "mcp_test_server", server_id: serverId })
+    }
+
+    function startMcpOAuth(serverId) {
+        sendToBackend({ type: "mcp_oauth_start", server_id: serverId })
     }
 
     // ── IPC Handler (qs ipc call minerva) ─────────────────────────────────

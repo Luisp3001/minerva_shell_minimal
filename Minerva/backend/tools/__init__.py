@@ -93,24 +93,40 @@ def _ensure_tool_collection():
 
 def get_relevant_tools(prompt: str, top_k: int = 8) -> list[dict]:
     """Selecciona capacidades relevantes; ante un fallo devuelve todas."""
+    from ..core.mcp_manager import mcp_mgr
+
+    mcp_tools = mcp_mgr.get_tool_definitions()
+    all_tools = TOOL_DEFINITIONS + mcp_tools
+
     collection = _ensure_tool_collection() if prompt.strip() else None
     if collection is None:
-        return TOOL_DEFINITIONS
+        return all_tools
     try:
+        if mcp_tools:
+            try:
+                collection.upsert(
+                    documents=[t["function"]["description"] for t in mcp_tools],
+                    ids=[t["function"]["name"] for t in mcp_tools],
+                )
+            except Exception:
+                pass
         results = collection.query(
             query_texts=[prompt],
-            n_results=min(top_k, len(TOOL_DEFINITIONS)),
+            n_results=min(top_k + len(mcp_tools), len(all_tools)),
         )
         if not results["ids"] or not results["ids"][0]:
-            return TOOL_DEFINITIONS
+            return all_tools
         names = set(results["ids"][0]) | _ALWAYS_INCLUDE
+        # Incluir herramientas MCP conectadas para máxima disponibilidad
+        if len(mcp_tools) <= 15:
+            names.update(t["function"]["name"] for t in mcp_tools)
         if _DOCX_REQUEST.search(prompt):
             # run_command siempre está disponible; garantiza que su alternativa
             # segura y especializada también lo esté para solicitudes de Word.
             names.update({"create_docx", "modify_docx"})
         return [
             tool
-            for tool in TOOL_DEFINITIONS
+            for tool in all_tools
             if tool["function"]["name"] in names
         ]
     except Exception as exc:
@@ -118,7 +134,7 @@ def get_relevant_tools(prompt: str, top_k: int = 8) -> list[dict]:
             f"Error consultando ChromaDB: {type(exc).__name__}",
             file=sys.stderr,
         )
-        return TOOL_DEFINITIONS
+        return all_tools
 
 
 # Conservado únicamente para compatibilidad con importadores antiguos.
@@ -361,6 +377,11 @@ def dispatch_tool(
     **kwargs,
 ) -> str | CommandJob | ScreenCapture:
     """Valida y ejecuta una tool registrada usando una interfaz uniforme."""
+    from ..core.mcp_manager import mcp_mgr
+
+    if mcp_mgr.is_mcp_tool(tool_name):
+        return mcp_mgr.call_tool(tool_name, args)
+
     context = dict(kwargs)
     context["tool_call_id"] = tool_call_id
     return _registry.dispatch(tool_name, args, context)

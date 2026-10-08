@@ -38,6 +38,7 @@ from backend.core.io import (
     safe_session_environment,
 )
 from backend.core.job_manager import JobSnapshot, job_mgr
+from backend.core.mcp_manager import mcp_mgr
 from backend.core.memory import get_memory_context
 from backend.core.tasks_db import (
     clear_completed_tasks,
@@ -941,6 +942,15 @@ def main() -> None:
         daemon=True,
     ).start()
     emit({"type": "ready", "model": "Gemini", "home": HOME})
+    emit({"type": "mcp_servers_updated", "servers": mcp_mgr.get_servers()})
+    for s in mcp_mgr.get_servers():
+        if s.get("enabled", True) and s.get("url"):
+            threading.Thread(
+                target=mcp_mgr.test_and_refresh_server,
+                args=(s["id"],),
+                daemon=True,
+                name=f"mcp-init-{s['id']}",
+            ).start()
 
     while not shutdown_event.is_set():
         msg = _decode_message(msg_queue.get())
@@ -1040,6 +1050,43 @@ def main() -> None:
             continue
         if msg_type == "live_stop":
             _stop_live_session(str(msg.get("reason", "manual")))
+            continue
+        if msg_type == "mcp_get_servers":
+            emit({"type": "mcp_servers_updated", "servers": mcp_mgr.get_servers()})
+            continue
+        if msg_type == "mcp_save_server":
+            server_data = msg.get("server")
+            if isinstance(server_data, dict):
+                mcp_mgr.add_or_update_server(server_data)
+                emit({"type": "mcp_servers_updated", "servers": mcp_mgr.get_servers()})
+            continue
+        if msg_type == "mcp_delete_server":
+            server_id = str(msg.get("server_id", ""))
+            if server_id:
+                mcp_mgr.delete_server(server_id)
+                emit({"type": "mcp_servers_updated", "servers": mcp_mgr.get_servers()})
+            continue
+        if msg_type == "mcp_toggle_server":
+            server_id = str(msg.get("server_id", ""))
+            enabled = bool(msg.get("enabled", True))
+            if server_id:
+                mcp_mgr.toggle_server(server_id, enabled)
+                emit({"type": "mcp_servers_updated", "servers": mcp_mgr.get_servers()})
+            continue
+        if msg_type == "mcp_test_server":
+            server_id = str(msg.get("server_id", ""))
+            if server_id:
+                threading.Thread(
+                    target=mcp_mgr.test_and_refresh_server,
+                    args=(server_id,),
+                    daemon=True,
+                    name=f"mcp-manual-test-{server_id}",
+                ).start()
+            continue
+        if msg_type == "mcp_oauth_start":
+            server_id = str(msg.get("server_id", ""))
+            if server_id:
+                mcp_mgr.start_oauth_flow(server_id)
             continue
         emit_error(f"Tipo de mensaje desconocido: {msg_type!r}")
 

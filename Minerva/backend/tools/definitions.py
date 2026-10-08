@@ -350,7 +350,7 @@ TOOL_DEFINITIONS = [
         "type": "function",
         "function": {
             "name": "read_pptx",
-            "description": "Lee y extrae el contenido de presentaciones de PowerPoint o diapositivas (PPTX, PPT). Úsala cuando el usuario pida abrir, leer, revisar o resumir diapos, presentaciones, filminas o archivos .pptx. NO uses run_command para esto.",
+            "description": "Lee y extrae el contenido de presentaciones de PowerPoint o diapositivas (PPTX, PPT). Úsala cuando el usuario pida abrir, leer, revisar o resumir diapositivas, presentaciones, filminas o archivos .pptx. NO uses run_command para esto.",
             "parameters": {
                 "type": "object",
                 "properties": {

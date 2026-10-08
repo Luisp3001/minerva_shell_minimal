@@ -41,11 +41,12 @@ Después reinicia Quickshell. El instalador conserva un entorno local existente 
 - **Memoria a largo plazo:** Archivos Markdown (`user_profile.md` y `preferences.md`) para almacenar el perfil del usuario y sus preferencias entre sesiones, actualizables proactivamente con `update_memory`.
 - **Proactividad (Tareas):** Conexión a PostgreSQL para gestionar tareas con alertas visuales sutiles en el Minerva_waveform. Soporta **tareas recurrentes** (diaria, semanal, mensual, anual con `recurrence_month`) con auto-renovación en segundo plano.
 - **Herramientas de archivos avanzadas:** Lectura inteligente por rangos de líneas (`read_file`), metadatos (`file_info`), creación directa (`write_file`), edición quirúrgica (`replace_lines`) y conversión a Markdown para PDF, Word (`.docx`), PowerPoint (`.pptx`) y Excel/CSV (`.xlsx`/`.csv`).
+- **Soporte de servidores MCP (Model Context Protocol):** Conexión a servidores MCP remotos o locales mediante transporte HTTP / Server-Sent Events (SSE) y JSON-RPC con soporte para **OAuth 2.0 (PKCE)**, tokens Bearer y servidores públicos. Permite usar herramientas expuestas por servicios como Google Drive, Gmail, GitHub y APIs externas directamente en el loop agentic. Gestionable desde la pestaña dedicada en `SettingsPanel.qml` con switches individuales para activar/desactivar servidores en caliente.
 - **Tool RAG:** Selección inteligente de herramientas relevantes vía embedding semántico para no saturar el contexto.
 - **Seguridad:** Todos los comandos requieren confirmación; la clasificación `safe / destructive / sudo` solo ajusta la advertencia y el canal de privilegios.
 - **Captura de pantalla:** Visión multimodal — Minerva puede ver tu pantalla y analizarla.
 - **Spotify:** Control completo vía OAuth2 PKCE; solo abre un callback loopback temporal durante la autenticación.
-- **Directorio de configuración unificado:** Centralización de variables de entorno (`.env`), credenciales y tokens de caché en `~/.config/minerva/`.
+- **Directorio de configuración unificado:** Centralización de variables de entorno (`.env`), credenciales, servidores MCP (`mcp_servers.json`) y tokens de caché en `~/.config/minerva/`.
 
 ---
 
@@ -128,6 +129,9 @@ Minerva/
     │   ├── memory.py            # Lectura y actualización de archivos Markdown (user_profile.md / preferences.md)
     │   │                        #   - get_memory_context() para inyección en el system prompt
     │   │                        #   - update_memory_section() para guardado quirúrgico de secciones
+    │   ├── mcp_manager.py       # MCPManager (singleton mcp_mgr):
+    │   │                        #   - Protocolo MCP HTTP/SSE y JSON-RPC con loopback para OAuth 2.0 PKCE
+    │   │                        #   - Descubrimiento ('tools/list'), ejecución ('tools/call') y persistencia en mcp_servers.json
     │   └── tasks_db.py          # Conexión a PostgreSQL (CRUD de tareas + recurrencia):
     │                            #   - init_db(): crea tabla y columnas de recurrencia
     │                            #   - renew_recurring_tasks(): renueva tareas vencidas en segundo plano
@@ -180,6 +184,12 @@ El frontend y el backend se comunican por el mismo subproceso, sin abrir un puer
 | `ping`            | Health check (retorna `ready`)                       |
 | `save_settings`   | Guardado atómico de ajustes privados                 |
 | `set_personality` | Aplica en caliente el wake word del perfil activo       |
+| `mcp_get_servers` | Solicita la lista de servidores MCP configurados     |
+| `mcp_save_server` | Guarda o actualiza un servidor MCP (`server`)         |
+| `mcp_delete_server` | Elimina un servidor MCP (`server_id`)               |
+| `mcp_toggle_server` | Activa o desactiva un servidor MCP (`server_id`, `enabled`) |
+| `mcp_test_server` | Prueba conexión y sincroniza herramientas (`server_id`) |
+| `mcp_oauth_start` | Inicia flujo de autenticación OAuth 2.0 PKCE en navegador (`server_id`) |
 
 **Python → QML (eventos):** El backend escribe una línea JSON por evento a stdout, que QML lee vía `SplitParser`. Los tipos de evento incluyen:
 
@@ -188,6 +198,10 @@ El frontend y el backend se comunican por el mismo subproceso, sin abrir un puer
 | `tasks_pending`          | Señal silenciosa: hay tareas pendientes (incluye `urgent: bool`, `urgency: string`) |
 | `tasks_cleared`          | Señal silenciosa: no hay tareas pendientes             |
 | `ready`                  | Backend inicializado, modelo y home disponibles        |
+| `mcp_servers_updated`    | Lista actualizada de servidores MCP y sus herramientas descubiertas |
+| `mcp_oauth_started`      | Flujo OAuth 2.0 iniciado en navegador con URL de autorización |
+| `mcp_oauth_success`      | Flujo OAuth 2.0 completado y tokens almacenados con éxito |
+| `mcp_oauth_error`        | Error durante el flujo de autorización OAuth 2.0       |
 | `token`                  | Token de texto generado por la IA (streaming)          |
 | `done`                   | Respuesta completa de la IA                            |
 | `tool_start`             | La IA comienza a usar una herramienta                  |
@@ -340,6 +354,29 @@ Minerva usa almacenamiento estructurado y ChromaDB para dos propósitos:
 3. **RAG Efímero de Documentos** (`query_document`): Permite consultar información puntual en PDF, DOCX y PPTX dividiendo el texto en chunks y creando una colección ChromaDB temporal en memoria.
 
 Directorio de configuración e historias: `~/.config/minerva/`
+
+---
+
+## Servidores MCP (Model Context Protocol)
+
+Minerva puede conectarse a cualquier servidor MCP remoto o local que utilice transporte HTTP (SSE o Streamable HTTP/JSON-RPC):
+
+1. **Gestión en `SettingsPanel.qml`:**
+   - La pestaña dedicada **"Servidores MCP"** permite ver el estado de cada conexión (🟢 Conectado, 🔴 Error, ⚪ Desactivado), la cantidad de herramientas expuestas, un switch para activar o desactivar cada servidor individualmente, y un visor desplegable para inspeccionar las funciones y esquemas que expone cada servicio.
+   - Botón `+ Conectar servidor` para agregar o editar servidores con nombre descriptivo y URL del endpoint.
+
+2. **Autenticación:**
+   - **Sin autenticación:** Servidores locales o en redes privadas.
+   - **Token Bearer / API Key:** Para servidores protegidos con cabecera `Authorization: Bearer <token>`.
+   - **OAuth 2.0 (PKCE):** Para servicios que requieren autorización basada en usuario como Google Drive, Gmail o GitHub. Minerva incluye un servidor loopback temporal en `http://127.0.0.1:8889/callback`, abre el navegador con `xdg-open` para iniciar sesión y autorizar, recibe el código, lo canjea por `access_token` y `refresh_token`, y renueva el token automáticamente al expirar.
+
+3. **Loop Agentic y Tool RAG:**
+   - Cada herramienta de un servidor MCP activo se registra automáticamente en el espacio de nombres `mcp__{server_id}__{tool_name}`.
+   - Se indexan en ChromaDB para Tool RAG y se ponen a disposición de Gemini en su bucle de hasta 12 turnos.
+   - Las herramientas de servidores MCP se ejecutan directamente retornando su contenido a la IA sin interrumpir la experiencia.
+
+4. **Almacenamiento persistente:**
+   - La configuración de servidores y tokens se guarda de forma atómica con permisos seguros `0600` en `~/.config/minerva/mcp_servers.json`.
 
 ---
 
