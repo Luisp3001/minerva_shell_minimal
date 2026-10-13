@@ -559,13 +559,13 @@ p { color: #9b969c; font-size: 14px; line-height: 1.5; }
                     pass
 
     def _build_stdio_env(self, server: dict[str, Any]) -> dict[str, str]:
-        """Construye el entorno para el proceso STDIO, mergeando env_vars del servidor."""
+        """Construye el entorno para el proceso STDIO, mergeando env_vars o env del servidor."""
         env = os.environ.copy()
-        extra_env = server.get("env_vars", {})
+        extra_env = server.get("env_vars") or server.get("env") or {}
         if isinstance(extra_env, dict):
             for k, v in extra_env.items():
-                if isinstance(k, str) and isinstance(v, str):
-                    env[k] = v
+                if isinstance(k, str):
+                    env[k] = str(v)
         return env
 
     def _ensure_stdio_proc(self, server: dict[str, Any]) -> subprocess.Popen:
@@ -970,13 +970,22 @@ p { color: #9b969c; font-size: 14px; line-height: 1.5; }
             return f"Error: Nombre de herramienta MCP inválido '{namespaced_tool_name}'"
 
         server_id = parts[1]
-        orig_tool_name = "__".join(parts[2:])
+        received_tool_name = "__".join(parts[2:])
 
         server = self.get_server(server_id)
         if not server:
             return f"Error: Servidor MCP '{server_id}' no encontrado."
         if not server.get("enabled", True):
             return f"Error: El servidor MCP '{server.get('name')}' está desactivado."
+
+        # Resolver el nombre real de la herramienta en el servidor (deshacer sanitización si aplica)
+        orig_tool_name = received_tool_name
+        cached_tools = self._tool_cache.get(server_id, server.get("tools", []))
+        for t in cached_tools:
+            real_name = t.get("name", "")
+            if real_name == received_tool_name or _sanitize_identifier(real_name) == received_tool_name:
+                orig_tool_name = real_name
+                break
 
         transport = server.get("transport", "http")
 
