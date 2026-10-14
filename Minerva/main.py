@@ -618,7 +618,7 @@ def _transcribe(audio_data) -> None:
     tmp_name = ""
     try:
         import soundfile as sf
-        from pywhispercpp.model import Model as WhisperModel
+        from faster_whisper import WhisperModel
 
         with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as tmp:
             tmp_name = tmp.name
@@ -626,11 +626,16 @@ def _transcribe(audio_data) -> None:
         if not voice_mgr.whisper_model:
             voice_mgr.whisper_model = WhisperModel(
                 "small",
-                language="es",
-                print_realtime=False,
-                print_progress=False,
+                device="cpu",
+                compute_type="int8",
+                cpu_threads=4,
             )
-        segments = voice_mgr.whisper_model.transcribe(tmp_name)
+        segments, _ = voice_mgr.whisper_model.transcribe(
+            tmp_name,
+            language="es",
+            beam_size=5,
+            vad_filter=True,
+        )
         text = " ".join(segment.text for segment in segments).strip()
         if text and "[BLANK_AUDIO]" not in text and len(text) >= 2:
             emit({"type": "voice_recognized", "text": text})

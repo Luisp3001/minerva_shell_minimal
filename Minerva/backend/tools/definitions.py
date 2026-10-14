@@ -36,8 +36,9 @@ SYSTEM_PROMPT_BASE = f"""## Reglas CRÍTICAS de comunicación
 - **NUNCA uses formato markdown (como asteriscos, negritas o cursivas).** El usuario te escucha a través de voz y los símbolos se leerían en voz alta (ej: "asterisco hola asterisco"). Genera solo texto plano.
 
 ## Herramientas disponibles
-- **Filesystem**: Puedes listar directorios (list_dir), leer archivos (read_file, read_pdf, read_docx, read_pptx, read_excel), inspeccionar metadatos (file_info), crear/sobreescribir archivos (write_file), crear documentos Word desde markdown (create_docx), modificar documentos Word añadiendo texto (modify_docx) y editar líneas específicas (replace_lines) dentro de {HOME}. IMPORTANTE: Para cualquier archivo PDF, DOCX, PPTX o Excel usa SIEMPRE la herramienta específica. Si debes crear o modificar Word, llama directamente a create_docx o modify_docx: NUNCA escribas ni ejecutes un script Python, ni uses run_command, Bash o LibreOffice para sustituir esas herramientas. create_docx ya aplica una plantilla editorial cuidada y acepta Markdown internamente aunque tus respuestas al usuario sean texto plano. Para archivos grandes de texto, primero usa file_info para conocer el total de líneas, luego lee con read_file en bloques (start_line, end_line) de hasta 200 líneas. Usa replace_lines para ediciones quirúrgicas sin reescribir el archivo completo. Si intentas leer o editar más allá del final del archivo, recibirás una señal [EOF]. Para buscar información concreta dentro de un PDF/DOCX/PPTX largo sin leerlo completo, usa query_document con una pregunta específica (RAG efímero). Para MD/TXT usa read_file; para Excel/CSV usa read_excel.
-- **Comandos**: Puedes proponer comandos bash con run_command. Todos requieren confirmación explícita del usuario; los que usan sudo se autentican con pkexec. Tras aprobarse, se ejecutan en segundo plano de forma asíncrona y puedes usar check_job_status para consultar su estado, salida y código de retorno.
+- **Búsqueda y activación de herramientas** (search_tools): Si necesitas una herramienta o capacidad que no está cargada en tus funciones actuales (como ejecutar comandos en terminal con run_command, controlar Spotify, mover ventanas en Hyprland, crear Word, tomar capturas de pantalla, o usar servidores MCP externos), llama inmediatamente a search_tools con lo que necesitas para activarla en tu contexto.
+- **Filesystem**: Puedes listar directorios (list_dir), leer archivos (read_file, read_pdf, read_docx, read_pptx, read_excel), inspeccionar metadatos (file_info), crear/sobreescribir archivos (write_file), crear documentos Word desde markdown (create_docx), modificar documentos Word añadiendo texto (modify_docx) y editar líneas específicas (replace_lines) dentro de {HOME}. IMPORTANTE: Para cualquier archivo PDF, DOCX, PPTX o Excel usa SIEMPRE la herramienta específica. Si debes crear o modificar Word, llama directamente a create_docx o modify_docx (búscalas con search_tools si no están cargadas): NUNCA escribas ni ejecutes un script Python, ni uses run_command, Bash o LibreOffice para sustituir esas herramientas. create_docx ya aplica una plantilla editorial cuidada y acepta Markdown internamente aunque tus respuestas al usuario sean texto plano. Para archivos grandes de texto, primero usa file_info para conocer el total de líneas, luego lee con read_file en bloques (start_line, end_line) de hasta 200 líneas. Usa replace_lines para ediciones quirúrgicas sin reescribir el archivo completo. Si intentas leer o editar más allá del final del archivo, recibirás una señal [EOF]. Para buscar información concreta dentro de un PDF/DOCX/PPTX largo sin leerlo completo, usa query_document con una pregunta específica (RAG efímero). Para MD/TXT usa read_file; para Excel/CSV usa read_excel.
+- **Comandos de terminal** (run_command): Puedes proponer comandos bash cuando la tarea REQUIERA estrictamente ejecución en shell (como instalar paquetes, git, systemctl, procesos o compilación). NO uses run_command para leer, listar o editar archivos (usa read_file, list_dir, replace_lines) ni para manipular documentos. Si run_command no está cargado en tus herramientas ejecutables, actívalo con search_tools. Todos los comandos requieren confirmación explícita del usuario; los que usan sudo se autentican con pkexec. Tras aprobarse, se ejecutan en segundo plano de forma asíncrona y puedes usar check_job_status para consultar su estado, salida y código de retorno.
 - **Búsqueda web** (web_search): Tienes acceso a internet en tiempo real. Úsala cuando:
   - El usuario pregunte por noticias, eventos recientes o información que puede haber cambiado.
   - Necesites precios, versiones de software, estadísticas actuales, o cualquier dato perecedero.
@@ -107,11 +108,37 @@ def get_system_prompt(personality: str = "minerva") -> str:
     """Construye el prompt común con la identidad activa."""
     normalized = str(personality).strip().lower()
     identity = PERSONALITY_PROMPTS.get(normalized, PERSONALITY_PROMPTS["minerva"])
-    return f"{identity}\n\n{SYSTEM_PROMPT_BASE}"
+    prompt = f"{identity}\n\n{SYSTEM_PROMPT_BASE}"
+    try:
+        from ..core.mcp_manager import mcp_mgr
+        servers = [s.get("name") for s in mcp_mgr.get_servers() if s.get("enabled", True)]
+        if servers:
+            prompt += (
+                f"\n\n## Servidores MCP externos conectados\n"
+                f"Están disponibles los siguientes servidores MCP: {', '.join(servers)}. "
+                "Usa search_tools con la acción que deseas realizar para activar sus herramientas específicas."
+            )
+    except Exception:
+        pass
+    return prompt
 
 
 # Conservado para importadores antiguos; equivale al perfil predeterminado.
 SYSTEM_PROMPT = get_system_prompt("minerva")
+
+# Herramientas que siempre están presentes en el primer turno para no añadir latencia.
+# Las demás se activan bajo demanda usando search_tools.
+CORE_TOOL_NAMES = {
+    "search_tools",
+    "list_dir",
+    "read_file",
+    "write_file",
+    "replace_lines",
+    "file_info",
+    "manage_tasks",
+    "update_memory",
+    "web_search",
+}
 # ─────────────────────────────────────────────────────────────────────────────
 # Emotion tags para Fish Audio TTS
 # Se inyecta al system prompt solo cuando ttsProvider == "fish"
@@ -149,6 +176,35 @@ REGLA: toda respuesta debe comenzar con al menos un emotion tag. Si una respuest
 
 
 TOOL_DEFINITIONS = [
+    {
+        "type": "function",
+        "function": {
+            "name": "search_tools",
+            "description": (
+                "Busca y activa herramientas adicionales en tu entorno cuando necesites "
+                "capacidades que no están en tus funciones actualmente cargadas "
+                "(ejemplos: ejecutar comandos en terminal bash con run_command, controlar Spotify con spotify_music, "
+                "mover ventanas o cambiar workspaces en Hyprland con hyprland_control, "
+                "crear/modificar documentos Word con create_docx/modify_docx, generar imágenes con generate_image, "
+                "tomar captura de pantalla con capture_screen, o usar herramientas de servidores MCP externos como GitHub, Google Drive, etc.). "
+                "Las herramientas encontradas se activan automáticamente para que puedas invocarlas de inmediato."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "query": {
+                        "type": "string",
+                        "description": (
+                            "Descripción de la capacidad o acción que buscas realizar "
+                            "(ej: 'ejecutar comando de terminal bash', 'reproducir musica en spotify', "
+                            "'cambiar workspace en hyprland', 'crear documento word docx', 'tomar captura de pantalla', 'crear issue en github')."
+                        ),
+                    }
+                },
+                "required": ["query"],
+            },
+        },
+    },
     {
         "type": "function",
         "function": {
@@ -424,7 +480,7 @@ TOOL_DEFINITIONS = [
         "type": "function",
         "function": {
             "name": "spotify_music",
-            "description": "Controla Spotify: buscar musica, reproducir, pausar, saltar cancion, volumen, ver que suena. Requiere Spotify Premium para reproduccion.",
+            "description": "Controla Spotify: buscar musica, reproducir, pausar, saltar cancion, volumen, ver que suena. Requiere Spotify Premium para reproduccion. La accion 'queue' tiene efecto persistente: invocala una sola vez por cada canción solicitada y, cuando recibas confirmación, responde al usuario sin volver a llamarla.",
             "parameters": {
                 "type": "object",
                 "properties": {

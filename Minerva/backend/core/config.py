@@ -73,7 +73,7 @@ VOICE_AVAILABLE = _available(
     "numpy",
     "sounddevice",
     "soundfile",
-    "pywhispercpp.model",
+    "faster_whisper",
 )
 VOSK_AVAILABLE = _available("vosk")
 FISH_AUDIO_AVAILABLE = _available("fish_audio_sdk") or _available("fishaudio")

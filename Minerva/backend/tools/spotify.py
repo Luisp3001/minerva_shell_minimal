@@ -104,6 +104,10 @@ class SpotifyManager:
         self._refresh_lock = threading.Lock()
         self._auth_in_progress = False
         self._last_refresh_error = ""
+        # Las llamadas de tool de un mismo turno pueden llegar repetidas desde
+        # el modelo. La cola de Spotify no es idempotente, por lo que debemos
+        # recordar qué URI ya se solicitó para cada request de Minerva.
+        self._queue_requests: dict[str, set[str]] = {}
         self._load_credentials()
         self._load_cached_token()
 
@@ -263,7 +267,8 @@ class SpotifyManager:
             return self.access_token or ""
 
     def _api_request(self, method: str, endpoint: str, body: dict = None,
-                     params: dict = None, timeout: int = 10) -> dict:
+                     params: dict = None, timeout: int = 10,
+                     retry_transient: bool = True) -> dict:
         """Hace una petición autenticada a la API de Spotify."""
         url = f"{SPOTIFY_API_BASE}{endpoint}"
         if params:
@@ -316,7 +321,7 @@ class SpotifyManager:
                         self.token_expiry = 0
                     if self._refresh_access_token():
                         continue
-                if exc.code == 429 or 500 <= exc.code < 600:
+                if retry_transient and (exc.code == 429 or 500 <= exc.code < 600):
                     if attempt < 2:
                         try:
                             delay = min(
@@ -329,7 +334,7 @@ class SpotifyManager:
                         continue
                 return {"error": f"Error HTTP {exc.code}: {error_body[:500]}"}
             except (TimeoutError, urllib.error.URLError) as exc:
-                if attempt < 2:
+                if retry_transient and attempt < 2:
                     time.sleep(min(4.0, 2.0 ** attempt))
                     continue
                 return {"error": f"Error de conexión: {type(exc).__name__}"}
@@ -674,7 +679,8 @@ class SpotifyManager:
             f"Progreso: {p_min}:{p_sec:02d} / {d_min}:{d_sec:02d}"
         )
 
-    def add_to_queue(self, uri: str = None, query: str = None) -> str:
+    def add_to_queue(self, uri: str = None, query: str = None,
+                     request_id: str = "") -> str:
         if not uri and query:
             search_result = self._api_request("GET", "/search", params={
                 "q": query, "type": "track", "limit": 10, "market": "US"
@@ -700,11 +706,28 @@ class SpotifyManager:
                 "agregar a la cola."
             )
 
+        if request_id:
+            with self._lock:
+                queued_uris = self._queue_requests.setdefault(request_id, set())
+                if uri in queued_uris:
+                    return (
+                        "La canción ya fue enviada a la cola durante esta "
+                        "misma petición; se omitió la llamada duplicada."
+                    )
+                queued_uris.add(uri)
+                # Evitar crecimiento sin límite si el proceso permanece abierto.
+                while len(self._queue_requests) > 256:
+                    oldest_request = next(iter(self._queue_requests))
+                    del self._queue_requests[oldest_request]
+
         result = self._api_request(
             "POST",
             "/me/player/queue",
             params={"uri": uri},
             timeout=20,
+            # Si Spotify recibió el POST pero se pierde la respuesta, repetirlo
+            # duplica la canción. La autenticación 401 sí puede reintentarse.
+            retry_transient=False,
         )
         if "error" in result:
             return result["error"]
@@ -727,7 +750,8 @@ spotify_mgr = SpotifyManager()
 
 
 def tool_spotify_music(action: str, query: str = "", uri: str = "",
-                       search_type: str = "track", volume: int = 50) -> str:
+                       search_type: str = "track", volume: int = 50,
+                       request_id: str = "") -> str:
     """Herramienta unificada de Spotify para la IA."""
     if not spotify_mgr.is_configured():
         return (
@@ -768,7 +792,11 @@ def tool_spotify_music(action: str, query: str = "", uri: str = "",
     elif action == "current":
         res = spotify_mgr.current_playing()
     elif action == "queue":
-        res = spotify_mgr.add_to_queue(uri=uri or None, query=query or None)
+        res = spotify_mgr.add_to_queue(
+            uri=uri or None,
+            query=query or None,
+            request_id=request_id,
+        )
     else:
         res = (
             f"Accion desconocida: '{action}'. Acciones validas: search, play, "

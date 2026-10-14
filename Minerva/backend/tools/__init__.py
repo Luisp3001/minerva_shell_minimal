@@ -156,6 +156,20 @@ def _emit_tool_event(context: ToolContext, event: dict) -> None:
     emit(event)
 
 
+from .tool_search import get_initial_tools, search_and_activate_tools
+
+
+@_registry.register("search_tools")
+def _search_tools(args: dict, context: ToolContext):
+    query = args.get("query", "")
+    active_tool_names = context.get("active_tool_names", set())
+    summary, new_tools = search_and_activate_tools(query, active_tool_names)
+    activate_cb = context.get("activate_tools")
+    if callable(activate_cb) and new_tools:
+        activate_cb(new_tools)
+    return summary
+
+
 @_registry.register("generate_image")
 def _generate_image(args: dict, context: ToolContext):
     from .imagen import tool_generate_image
@@ -278,6 +292,7 @@ def _spotify_music(args: dict, _context: ToolContext):
         uri=args.get("uri", ""),
         search_type=args.get("search_type", "track"),
         volume=args.get("volume", 50),
+        request_id=_context.get("request_id", ""),
     )
 
 

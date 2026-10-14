@@ -40,9 +40,8 @@ Después reinicia Quickshell. El instalador conserva un entorno local existente 
 - **Minerva_waveform:** Visualización animada por GPU (fragment shader) que reacciona al audio en tiempo real con RMS y 4 bandas FFT.
 - **Memoria a largo plazo:** Archivos Markdown (`user_profile.md` y `preferences.md`) para almacenar el perfil del usuario y sus preferencias entre sesiones, actualizables proactivamente con `update_memory`.
 - **Proactividad (Tareas):** Conexión a PostgreSQL para gestionar tareas con alertas visuales sutiles en el Minerva_waveform. Soporta **tareas recurrentes** (diaria, semanal, mensual, anual con `recurrence_month`) con auto-renovación en segundo plano.
-- **Herramientas de archivos avanzadas:** Lectura inteligente por rangos de líneas (`read_file`), metadatos (`file_info`), creación directa (`write_file`), edición quirúrgica (`replace_lines`) y conversión a Markdown para PDF, Word (`.docx`), PowerPoint (`.pptx`) y Excel/CSV (`.xlsx`/`.csv`).
 - **Soporte de servidores MCP (Model Context Protocol):** Conexión a servidores MCP remotos o locales mediante transporte HTTP / Server-Sent Events (SSE) y JSON-RPC con soporte para **OAuth 2.0 (PKCE)**, tokens Bearer y servidores públicos. Permite usar herramientas expuestas por servicios como Google Drive, Gmail, GitHub y APIs externas directamente en el loop agentic. Gestionable desde la pestaña dedicada en `SettingsPanel.qml` con switches individuales para activar/desactivar servidores en caliente.
-- **Tool RAG:** Selección inteligente de herramientas relevantes vía embedding semántico para no saturar el contexto.
+- **Tool Search & Carga Diferida (search_tools):** En lugar de forzar búsquedas semánticas sobre el mensaje crudo del usuario, Minerva cuenta con herramientas Core seguras y la meta-herramienta `search_tools`. La IA busca y activa al vuelo capacidades especializadas (comandos bash con `run_command`, Spotify, Hyprland, Word, imágenes) y servidores MCP enteros bajo demanda, ahorrando tokens de entrada y evitando ejecuciones no deseadas.
 - **Seguridad:** Todos los comandos requieren confirmación; la clasificación `safe / destructive / sudo` solo ajusta la advertencia y el canal de privilegios.
 - **Captura de pantalla:** Visión multimodal — Minerva puede ver tu pantalla y analizarla.
 - **Spotify:** Control completo vía OAuth2 PKCE; solo abre un callback loopback temporal durante la autenticación.
@@ -119,7 +118,7 @@ Minerva/
     │   ├── voice.py             # VoiceManager (singleton voice_mgr):
     │   │                        #   - TTS triple: Piper (local ONNX), Fish Audio (nube con Emotion Tags)
     │   │                        #     o Google Gemini TTS (~30 voces neurales)
-    │   │                        #   - STT: Whisper (pywhispercpp)
+    │   │                        #   - STT: Whisper (faster-whisper)
     │   │                        #   - Wake word: Vosk con stream de audio continuo
     │   │                        #   - StreamEmotionStripper para limpiar tags en tiempo real
     │   ├── audio_analyzer.py    # AudioAnalyzer: RMS + FFT de 4 bandas
@@ -138,7 +137,9 @@ Minerva/
     │
     └── tools/                   # Herramientas que la IA puede invocar
         ├── __init__.py          # Exporta dispatch_tool() (despachador centralizado),
-        │                        # TOOL_DEFINITIONS, SYSTEM_PROMPT, get_relevant_tools() (RAG)
+        │                        # TOOL_DEFINITIONS, SYSTEM_PROMPT, get_initial_tools()
+        ├── tool_search.py       # search_tools: Búsqueda y activación semántica y por palabras clave
+        │                        # de herramientas diferidas y servidores MCP bajo demanda
         ├── definitions.py       # Prompts Minerva/JARVIS, reglas comunes, contexto y Emotion Tags
         │                        # TOOL_DEFINITIONS (esquemas JSON de todas las herramientas)
         ├── registry.py          # Registro de handlers y validación de JSON Schema
@@ -260,7 +261,7 @@ Minerva tiene un pipeline de voz completo con tres subsistemas independientes:
 
 **Wake word (siempre activo):** Un hilo dedicado escucha el micrófono continuamente usando Vosk con un modelo de español. Usa "minerva" con el perfil Minerva y "jarvis" con el perfil JARVIS (también tolera la transcripción "yarvis"). El cambio se aplica en caliente y al detectar la palabra emite `wake_word_detected` para que la UI active la grabación automáticamente.
 
-**STT (Speech-to-Text):** Al activar la grabación (botón de micrófono o wake word), el audio del micrófono se acumula en un búfer. Cuando se detiene la grabación (manual o por detección de silencio), el audio se transcribe con Whisper (pywhispercpp, modelo small) y el texto resultante se envía como si el usuario lo hubiera escrito.
+**STT (Speech-to-Text):** Al activar la grabación (botón de micrófono o wake word), el audio del micrófono se acumula en un búfer. Cuando se detiene la grabación (manual o por detección de silencio), el audio se transcribe con Whisper (faster-whisper, modelo small con int8 y VAD) y el texto resultante se envía como si el usuario lo hubiera escrito.
 
 **TTS (Text-to-Speech):** Motor triple configurable desde la UI:
 - **Piper (local ONNX):** Síntesis offline rápida con modelo ONNX en español (`es_MX-claude-high`).
@@ -386,7 +387,7 @@ El backend detecta automáticamente qué dependencias están instaladas y desact
 
 | Flag                     | Dependencias requeridas                  | Funcionalidad             |
 |--------------------------|------------------------------------------|---------------------------|
-| `VOICE_AVAILABLE`        | sounddevice, soundfile, pywhispercpp     | Grabación y transcripción (STT) |
+| `VOICE_AVAILABLE`        | sounddevice, soundfile, faster-whisper     | Grabación y transcripción (STT) |
 | `VOSK_AVAILABLE`         | vosk                                     | Wake word del perfil ("Minerva"/"Jarvis") |
 | `FISH_AUDIO_AVAILABLE`   | fish_audio_sdk                           | TTS en la nube con Emotion Tags |
 | `GEMINI_TTS_AVAILABLE`   | google-genai                             | TTS en la nube con Google Gemini (~30 voces) |

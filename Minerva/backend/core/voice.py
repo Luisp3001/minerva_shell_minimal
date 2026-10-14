@@ -221,7 +221,7 @@ class VoiceManager:
         try:
             import numpy as numpy_module
             import soundfile as soundfile_module
-            from pywhispercpp.model import Model as WhisperModel
+            from faster_whisper import WhisperModel
 
             np = numpy_module
             sf = soundfile_module
@@ -786,15 +786,22 @@ class VoiceManager:
             if not self.whisper_model:
                 try:
                     self.whisper_model = Model(
-                        "small", language="es",
-                        print_realtime=False, print_progress=False
+                        "small",
+                        device="cpu",
+                        compute_type="int8",
+                        cpu_threads=8,
                     )
                 except Exception:
                     os.remove(tmp_name)
                     return "error"
 
             try:
-                segments = self.whisper_model.transcribe(tmp_name)
+                segments, _ = self.whisper_model.transcribe(
+                    tmp_name,
+                    language="es",
+                    beam_size=5,
+                    vad_filter=True,
+                )
                 text = " ".join([s.text for s in segments]).strip()
             except Exception:
                 text = "error"

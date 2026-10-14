@@ -13,7 +13,12 @@ import time
 import urllib.error
 import urllib.request
 
-from ..tools import TOOL_DEFINITIONS, dispatch_tool, get_relevant_tools
+from ..tools import (
+    TOOL_DEFINITIONS,
+    dispatch_tool,
+    get_initial_tools,
+    get_relevant_tools,
+)
 from ..tools.screen import ScreenCapture
 from .io import emit
 from .job_manager import CommandJob, job_mgr
@@ -189,7 +194,7 @@ def _split_concatenated_calls(raw_name: str, raw_args: str, known_names: set) ->
 
 def do_chat_gemini(
     history: list,
-    max_iters: int = 12,
+    max_iters: int = 30,
     model: str = "gemini-2.5-flash",
     api_key: str = "",
     temperature: float = 0.7,
@@ -225,14 +230,16 @@ def do_chat_gemini(
     if voice_ready:
         voice_mgr.tts_stop_event.clear()
 
-    # Obtener el último mensaje del usuario para el RAG de tools
-    user_prompt = next(
-        (m.get("content", "") for m in reversed(history) if m.get("role") == "user"),
-        ""
-    )
-    dynamic_tools = (
-        get_relevant_tools(user_prompt) if user_prompt else TOOL_DEFINITIONS
-    )
+    # Herramientas iniciales: Core tools + cualquier herramienta ya usada en la sesión
+    dynamic_tools = list(get_initial_tools(history))
+    active_tool_names = {t["function"]["name"] for t in dynamic_tools}
+
+    def activate_tools(new_tools: list[dict]) -> None:
+        for t in new_tools:
+            name = t["function"]["name"]
+            if name not in active_tool_names:
+                active_tool_names.add(name)
+                dynamic_tools.append(t)
 
     # Claves válidas para la API OpenAI-compatible de Gemini
     _valid_keys = {"role", "content", "tool_calls", "tool_call_id", "name"}
@@ -584,6 +591,8 @@ def do_chat_gemini(
                     api_key=api_key,
                     request_id=request_id,
                     register_turn=has_command_calls,
+                    activate_tools=activate_tools,
+                    active_tool_names=active_tool_names,
                 )
             except Exception as exc:
                 result = f"Error interno en {tool_name}: {type(exc).__name__}"
