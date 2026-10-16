@@ -236,8 +236,8 @@ Item {
 
     function triggerOAuthFromForm() {
         if (!aiWidget) return
-        if (!draftServerClientId.trim() || !draftServerAuthUrl.trim() || !draftServerTokenUrl.trim()) {
-            setBanner("Completa Client ID, Auth URL y Token URL antes de autenticar.", "error")
+        if (!draftServerUrl.trim() && !draftServerAuthUrl.trim()) {
+            setBanner("Ingresa la URL del servidor antes de iniciar sesión.", "error")
             return
         }
         saveDraftServer()
@@ -1158,9 +1158,9 @@ Item {
                                 spacing: 8
                                 Repeater {
                                     model: [
-                                        { value: "none", label: "Sin autenticación" },
+                                        { value: "none", label: "Auto / Sin auth" },
                                         { value: "bearer", label: "Token Bearer / API Key" },
-                                        { value: "oauth2", label: "OAuth 2.0 (PKCE)" }
+                                        { value: "oauth2", label: "OAuth 2.0" }
                                     ]
                                     delegate: OptionChip {
                                         value: modelData.value
@@ -1206,6 +1206,15 @@ Item {
                             width: parent.width
                             spacing: 8
                             visible: root.draftServerTransport === "http" && root.draftServerAuthType === "oauth2"
+
+                            Text {
+                                width: parent.width
+                                text: "💡 Para servidores MCP estándar (Lucid, Linear, etc.), los campos a continuación se descubren automáticamente al conectar si los dejas vacíos."
+                                font.family: Theme.fontSans
+                                font.pixelSize: 10
+                                color: Theme.accent
+                                wrapMode: Text.Wrap
+                            }
 
                             // Plantillas rápidas
                             Row {
@@ -1478,16 +1487,19 @@ Item {
                                             width: authBadgeLabel.implicitWidth + 12
                                             radius: 6
                                             visible: (modelData.transport || "http") === "http"
-                                            color: Qt.rgba(1, 1, 1, 0.06)
+                                            color: modelData.status === "auth_required" ? Qt.rgba(0.9, 0.78, 0.53, 0.15) : Qt.rgba(1, 1, 1, 0.06)
                                             Text {
                                                 id: authBadgeLabel
                                                 anchors.centerIn: parent
-                                                text: modelData.auth_type === "oauth2"
-                                                    ? "OAuth 2.0"
-                                                    : (modelData.auth_type === "bearer" ? "Bearer Token" : "Publico")
+                                                text: modelData.status === "auth_required"
+                                                    ? "Pendiente Auth"
+                                                    : (modelData.auth_type === "oauth2"
+                                                        ? "OAuth 2.0"
+                                                        : (modelData.auth_type === "bearer" ? "Bearer Token" : "Publico"))
                                                 font.family: Theme.fontSans
                                                 font.pixelSize: 9
-                                                color: Theme.textMuted
+                                                font.weight: modelData.status === "auth_required" ? Font.Bold : Font.Normal
+                                                color: modelData.status === "auth_required" ? Theme.warning : Theme.textMuted
                                             }
                                         }
 
@@ -1556,7 +1568,43 @@ Item {
                                     elide: Text.ElideRight
                                 }
 
-                                // Mensaje de Error (si aplica)
+                                // Banner Informativo cuando Requiere Autorización
+                                Rectangle {
+                                    width: parent.width
+                                    height: authReqCol.implicitHeight + 16
+                                    radius: 10
+                                    visible: modelData.status === "auth_required"
+                                    color: Qt.rgba(0.9, 0.78, 0.53, 0.12)
+                                    border.width: 1; border.color: Qt.rgba(0.9, 0.78, 0.53, 0.4)
+                                    Row {
+                                        id: authReqCol
+                                        anchors { left: parent.left; right: parent.right; verticalCenter: parent.verticalCenter; margins: 10 }
+                                        spacing: 10
+                                        Text { text: "🔑"; font.pixelSize: 14; anchors.verticalCenter: parent.verticalCenter }
+                                        Column {
+                                            width: parent.width - 30
+                                            spacing: 2
+                                            anchors.verticalCenter: parent.verticalCenter
+                                            Text {
+                                                text: "Requiere autorización con tu cuenta"
+                                                font.family: Theme.fontSans
+                                                font.pixelSize: 11
+                                                font.weight: Font.Bold
+                                                color: Theme.warning
+                                            }
+                                            Text {
+                                                width: parent.width
+                                                text: modelData.error_message || "Haz clic en 'Conectar cuenta' para autorizar el acceso en tu navegador."
+                                                font.family: Theme.fontSans
+                                                font.pixelSize: 10
+                                                color: Theme.textMuted
+                                                wrapMode: Text.Wrap
+                                            }
+                                        }
+                                    }
+                                }
+
+                                // Mensaje de Error (si aplica y no es auth_required)
                                 Rectangle {
                                     width: parent.width
                                     height: errText.implicitHeight + 12
@@ -1590,7 +1638,7 @@ Item {
                                         border.width: 1; border.color: root.expandedServerIds[modelData.id] ? Theme.accent : Qt.rgba(1,1,1,0.08)
 
                                         Row {
-                                            id: viewToolsLabel
+                                             id: viewToolsLabel
                                             anchors.centerIn: parent
                                             spacing: 5
                                             Text {
@@ -1642,27 +1690,36 @@ Item {
                                         }
                                     }
 
-                                    // Botón OAuth (si el servidor usa OAuth 2.0)
+                                    // Botón OAuth (si el servidor usa OAuth 2.0 o requiere autorización)
                                     Rectangle {
-                                        visible: modelData.auth_type === "oauth2"
-                                        height: 28; width: oauthBtnText.implicitWidth + 16; radius: 8
-                                        color: Qt.rgba(0.9, 0.78, 0.53, 0.12)
-                                        border.width: 1; border.color: Qt.rgba(0.9, 0.78, 0.53, 0.3)
+                                        visible: modelData.auth_type === "oauth2" || modelData.status === "auth_required"
+                                        height: 28
+                                        width: oauthBtnText.implicitWidth + 20
+                                        radius: 8
+                                        color: modelData.status === "auth_required"
+                                            ? Qt.rgba(0.9, 0.78, 0.53, 0.28)
+                                            : (oauthBtnArea.containsMouse ? Qt.rgba(0.9, 0.78, 0.53, 0.2) : Qt.rgba(0.9, 0.78, 0.53, 0.12))
+                                        border.width: 1
+                                        border.color: modelData.status === "auth_required" ? Theme.warning : Qt.rgba(0.9, 0.78, 0.53, 0.4)
+
                                         Text {
                                             id: oauthBtnText
                                             anchors.centerIn: parent
-                                            text: "🔑 Re-autenticar"
+                                            text: modelData.status === "connected" ? "🔑 Re-autenticar" : "🔑 Conectar cuenta"
                                             font.family: Theme.fontSans
                                             font.pixelSize: 10
+                                            font.weight: Font.Bold
                                             color: Theme.warning
                                         }
                                         MouseArea {
+                                            id: oauthBtnArea
                                             anchors.fill: parent
                                             hoverEnabled: true
                                             cursorShape: Qt.PointingHandCursor
                                             onClicked: {
                                                 if (root.aiWidget && root.aiWidget.startMcpOAuth) {
                                                     root.aiWidget.startMcpOAuth(modelData.id)
+                                                    root.setBanner("Abriendo navegador para iniciar sesión con " + (modelData.name || "el servidor") + "...", "info")
                                                 }
                                             }
                                         }

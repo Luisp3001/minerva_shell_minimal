@@ -238,6 +238,160 @@ class MCPManager:
 
     # ── Autenticación OAuth 2.0 y Headers ─────────────────────────────────────
 
+    def discover_oauth_metadata(self, url: str) -> dict[str, Any] | None:
+        """Descubre automáticamente los endpoints OAuth 2.0 y PRM del servidor MCP (RFC 8414, RFC 9728)."""
+        url = url.strip()
+        if not url:
+            return None
+
+        parsed_url = urllib.parse.urlparse(url)
+        if not parsed_url.scheme or not parsed_url.netloc:
+            return None
+
+        base_origin = f"{parsed_url.scheme}://{parsed_url.netloc}"
+        headers = {
+            "User-Agent": "Minerva-MCP-Client/1.0",
+            "Accept": "application/json, text/event-stream",
+        }
+
+        try:
+            with httpx.Client(timeout=10.0, follow_redirects=True) as client:
+                # 1. Petición inicial para capturar headers WWW-Authenticate / PRM
+                resource_metadata_url = None
+                try:
+                    init_payload = {
+                        "jsonrpc": "2.0",
+                        "id": 1,
+                        "method": "initialize",
+                        "params": {
+                            "protocolVersion": "2024-11-05",
+                            "capabilities": {},
+                            "clientInfo": {"name": "Minerva", "version": "1.0"},
+                        },
+                    }
+                    res = client.post(url, json=init_payload, headers=headers)
+                    auth_header = (
+                        res.headers.get("www-authenticate")
+                        or res.headers.get("x-amzn-remapped-www-authenticate")
+                        or ""
+                    )
+                    if "resource_metadata=" in auth_header:
+                        m = re.search(r'resource_metadata="([^"]+)"', auth_header)
+                        if m:
+                            resource_metadata_url = m.group(1)
+                except Exception:
+                    pass
+
+                # 2. Si no vino en el header, probar rutas PRM conocidas
+                if not resource_metadata_url:
+                    candidates = [
+                        urllib.parse.urljoin(base_origin, "/.well-known/oauth-protected-resource/mcp"),
+                        urllib.parse.urljoin(base_origin, "/.well-known/oauth-protected-resource"),
+                        urllib.parse.urljoin(url.rstrip("/") + "/", ".well-known/oauth-protected-resource"),
+                    ]
+                    for cand in candidates:
+                        try:
+                            r = client.get(cand, headers={"Accept": "application/json"})
+                            if r.status_code == 200 and "application/json" in r.headers.get("Content-Type", ""):
+                                resource_metadata_url = cand
+                                break
+                        except Exception:
+                            pass
+
+                auth_servers: list[str] = []
+                resource_indicator = url
+                scopes: list[str] = []
+
+                if resource_metadata_url:
+                    try:
+                        prm_res = client.get(resource_metadata_url, headers={"Accept": "application/json"})
+                        if prm_res.status_code == 200:
+                            prm_data = prm_res.json()
+                            if isinstance(prm_data, dict):
+                                auth_servers = prm_data.get("authorization_servers", [])
+                                resource_indicator = prm_data.get("resource", url)
+                                scopes = prm_data.get("scopes_supported", [])
+                    except Exception as exc:
+                        print(f"[MCP OAuth Discovery] Error leyendo PRM: {exc}", file=sys.stderr)
+
+                if not auth_servers:
+                    auth_servers = [base_origin]
+
+                auth_server_base = auth_servers[0].rstrip("/")
+
+                # 3. Consultar OAuth Authorization Server Metadata (RFC 8414)
+                oas_url = f"{auth_server_base}/.well-known/oauth-authorization-server"
+                oas_data: dict[str, Any] = {}
+                try:
+                    oas_res = client.get(oas_url, headers={"Accept": "application/json"})
+                    if oas_res.status_code == 200:
+                        oas_data = oas_res.json()
+                    else:
+                        oidc_url = f"{auth_server_base}/.well-known/openid-configuration"
+                        oidc_res = client.get(oidc_url, headers={"Accept": "application/json"})
+                        if oidc_res.status_code == 200:
+                            oas_data = oidc_res.json()
+                except Exception as exc:
+                    print(f"[MCP OAuth Discovery] Error consultando OAS: {exc}", file=sys.stderr)
+
+                if not isinstance(oas_data, dict):
+                    return None
+
+                auth_endpoint = oas_data.get("authorization_endpoint", "")
+                token_endpoint = oas_data.get("token_endpoint", "")
+                reg_endpoint = oas_data.get("registration_endpoint", "")
+                supported_scopes = oas_data.get("scopes_supported", scopes) or []
+
+                if auth_endpoint and token_endpoint:
+                    final_scopes = list(supported_scopes) if isinstance(supported_scopes, list) else []
+                    if "offline_access" in supported_scopes and "offline_access" not in final_scopes:
+                        final_scopes.append("offline_access")
+                    elif not final_scopes and "offline_access" in oas_data.get("scopes_supported", []):
+                        final_scopes = ["offline_access"]
+
+                    return {
+                        "auth_url": auth_endpoint,
+                        "token_url": token_endpoint,
+                        "registration_endpoint": reg_endpoint,
+                        "resource": resource_indicator,
+                        "scopes": " ".join(final_scopes),
+                        "auth_type": "oauth2",
+                    }
+        except Exception as exc:
+            print(f"[MCP OAuth Discovery] Error en auto-descubrimiento para {url}: {exc}", file=sys.stderr)
+
+        return None
+
+    def dynamic_client_register(
+        self,
+        registration_endpoint: str,
+        redirect_uri: str,
+        client_name: str = "Minerva MCP Client",
+    ) -> dict[str, Any] | None:
+        """Registra un cliente dinámico ante el Authorization Server usando RFC 7591."""
+        if not registration_endpoint:
+            return None
+        payload = {
+            "client_name": client_name,
+            "redirect_uris": [redirect_uri],
+            "grant_types": ["authorization_code", "refresh_token"],
+            "response_types": ["code"],
+            "token_endpoint_auth_method": "none",
+        }
+        try:
+            with httpx.Client(timeout=15.0) as client:
+                res = client.post(registration_endpoint, json=payload, headers={"Accept": "application/json"})
+            if res.status_code in (200, 201):
+                data = res.json()
+                if isinstance(data, dict) and data.get("client_id"):
+                    print(f"[MCP DCR] Cliente registrado con éxito (client_id: {data.get('client_id')[:8]}...)")
+                    return data
+            else:
+                print(f"[MCP DCR] Falló registro dinámico ({res.status_code}): {res.text[:300]}", file=sys.stderr)
+        except Exception as exc:
+            print(f"[MCP DCR] Excepción al registrar cliente dinámico: {exc}", file=sys.stderr)
+        return None
+
     def _refresh_oauth_token_if_needed(self, server: dict[str, Any]) -> bool:
         """Renueva el access token si está expirado y hay un refresh token disponible."""
         oauth_data = server.get("oauth2", {})
@@ -249,6 +403,7 @@ class MCPManager:
         client_id = oauth_data.get("client_id")
         client_secret = oauth_data.get("client_secret", "")
         expires_at = oauth_data.get("expires_at", 0)
+        resource = oauth_data.get("resource", "")
 
         # Si aún es válido con margen de 60 segundos, no hace falta renovar
         if expires_at and time.time() < (expires_at - 60):
@@ -258,11 +413,13 @@ class MCPManager:
             return bool(oauth_data.get("access_token"))
 
         try:
-            payload = {
+            payload: dict[str, Any] = {
                 "grant_type": "refresh_token",
                 "refresh_token": refresh_token,
                 "client_id": client_id,
             }
+            if resource:
+                payload["resource"] = resource
             if client_secret:
                 payload["client_secret"] = client_secret
 
@@ -340,20 +497,75 @@ class MCPManager:
             emit({"type": "mcp_oauth_error", "server_id": server_id, "error": "Servidor no encontrado."})
             return
 
-        oauth_cfg = server.get("oauth2", {})
+        port = 8889
+        redirect_uri = f"http://127.0.0.1:{port}/callback"
+
+        oauth_cfg = server.setdefault("oauth2", {})
         auth_url_base = oauth_cfg.get("auth_url", "").strip()
         token_url = oauth_cfg.get("token_url", "").strip()
         client_id = oauth_cfg.get("client_id", "").strip()
         client_secret = oauth_cfg.get("client_secret", "").strip()
         scopes = oauth_cfg.get("scopes", "").strip()
+        resource = oauth_cfg.get("resource", "").strip()
+        reg_endpoint = oauth_cfg.get("registration_endpoint", "").strip()
 
-        if not auth_url_base or not token_url or not client_id:
+        # ── Paso 1: Auto-descubrimiento si faltan endpoints (RFC 8414 / RFC 9728)
+        if (not auth_url_base or not token_url or not client_id) and server.get("url"):
+            print(f"[MCP OAuth] Descubriendo metadatos OAuth para '{server.get('name')}'...")
+            discovered = self.discover_oauth_metadata(server["url"])
+            if discovered:
+                if not auth_url_base and discovered.get("auth_url"):
+                    auth_url_base = discovered["auth_url"]
+                    oauth_cfg["auth_url"] = auth_url_base
+                if not token_url and discovered.get("token_url"):
+                    token_url = discovered["token_url"]
+                    oauth_cfg["token_url"] = token_url
+                if not reg_endpoint and discovered.get("registration_endpoint"):
+                    reg_endpoint = discovered["registration_endpoint"]
+                    oauth_cfg["registration_endpoint"] = reg_endpoint
+                if not resource and discovered.get("resource"):
+                    resource = discovered["resource"]
+                    oauth_cfg["resource"] = resource
+                if not scopes and discovered.get("scopes"):
+                    scopes = discovered["scopes"]
+                    oauth_cfg["scopes"] = scopes
+
+                server["auth_type"] = "oauth2"
+                self._save_servers()
+
+        # ── Paso 2: Dynamic Client Registration si falta Client ID (RFC 7591)
+        if not client_id and reg_endpoint:
+            print(f"[MCP OAuth] Registrando cliente dinámicamente en {reg_endpoint}...")
+            reg_result = self.dynamic_client_register(
+                reg_endpoint,
+                redirect_uri=redirect_uri,
+                client_name="Minerva MCP Client",
+            )
+            if reg_result and reg_result.get("client_id"):
+                client_id = reg_result["client_id"]
+                oauth_cfg["client_id"] = client_id
+                if reg_result.get("client_secret"):
+                    client_secret = reg_result["client_secret"]
+                    oauth_cfg["client_secret"] = client_secret
+                self._save_servers()
+
+        if not auth_url_base or not token_url:
             with self._oauth_lock:
                 self._oauth_in_progress = False
             emit({
                 "type": "mcp_oauth_error",
                 "server_id": server_id,
-                "error": "Faltan Auth URL, Token URL o Client ID en la configuración OAuth.",
+                "error": "No se encontraron Authorization URL o Token URL para el servidor.",
+            })
+            return
+
+        if not client_id:
+            with self._oauth_lock:
+                self._oauth_in_progress = False
+            emit({
+                "type": "mcp_oauth_error",
+                "server_id": server_id,
+                "error": "El servidor no soporta registro dinámico automático. Se requiere un Client ID manual.",
             })
             return
 
@@ -363,18 +575,19 @@ class MCPManager:
         code_challenge = base64.urlsafe_b64encode(hashed).decode("ascii").rstrip("=")
         state = secrets.token_urlsafe(24)
 
-        port = 8889
-        redirect_uri = f"http://127.0.0.1:{port}/callback"
-
-        auth_params = {
+        auth_params: dict[str, str] = {
             "response_type": "code",
             "client_id": client_id,
             "redirect_uri": redirect_uri,
-            "scope": scopes,
             "state": state,
             "code_challenge": code_challenge,
             "code_challenge_method": "S256",
         }
+        if scopes:
+            auth_params["scope"] = scopes
+        if resource:
+            auth_params["resource"] = resource
+
         # Para Google OAuth, solicitar offline access para refresh token
         if "google" in auth_url_base.lower() or "accounts.google.com" in auth_url_base:
             auth_params["access_type"] = "offline"
@@ -386,6 +599,8 @@ class MCPManager:
         received_state: list[str] = []
         server_error: list[str] = []
         flow_done = threading.Event()
+
+        srv_name = server.get("name", "Servidor MCP")
 
         class OAuthCallbackHandler(BaseHTTPRequestHandler):
             def do_GET(self):
@@ -405,20 +620,90 @@ class MCPManager:
                     self.send_response(200)
                     self.send_header("Content-Type", "text/html; charset=utf-8")
                     self.end_headers()
-                    html = """<!DOCTYPE html>
-<html>
-<head><meta charset="utf-8"><title>Minerva MCP — Conectado</title>
+                    html = f"""<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Minerva MCP — Conectado</title>
 <style>
-body { background: #0c0c12; color: #f5f2f4; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; display: flex; align-items: center; justify-content: center; height: 100vh; margin: 0; }
-.card { background: #14141e; border: 1px solid rgba(120, 209, 211, 0.3); border-radius: 20px; padding: 40px; text-align: center; max-width: 420px; box-shadow: 0 12px 30px rgba(0,0,0,0.5); }
-h1 { color: #78d1d3; font-size: 22px; margin-bottom: 12px; }
-p { color: #9b969c; font-size: 14px; line-height: 1.5; }
+* {{ box-sizing: border-box; margin: 0; padding: 0; }}
+body {{
+  background: #09090f;
+  color: #f5f2f4;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 100vh;
+  padding: 20px;
+}}
+.card {{
+  background: #14141e;
+  border: 1px solid rgba(120, 209, 211, 0.35);
+  border-radius: 24px;
+  padding: 44px 36px;
+  text-align: center;
+  max-width: 440px;
+  width: 100%;
+  box-shadow: 0 20px 40px rgba(0,0,0,0.6);
+  animation: fadeIn 0.4s ease-out;
+}}
+@keyframes fadeIn {{
+  from {{ opacity: 0; transform: translateY(12px); }}
+  to {{ opacity: 1; transform: translateY(0); }}
+}}
+.icon {{
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 64px;
+  height: 64px;
+  border-radius: 50%;
+  background: rgba(120, 209, 211, 0.15);
+  color: #78d1d3;
+  font-size: 30px;
+  margin-bottom: 20px;
+}}
+h1 {{
+  color: #ffffff;
+  font-size: 22px;
+  font-weight: 700;
+  margin-bottom: 8px;
+}}
+.subtitle {{
+  color: #78d1d3;
+  font-size: 14px;
+  font-weight: 600;
+  margin-bottom: 16px;
+}}
+p {{
+  color: #9b969c;
+  font-size: 14px;
+  line-height: 1.6;
+  margin-bottom: 24px;
+}}
+.btn {{
+  background: #78d1d3;
+  color: #0c0c12;
+  border: none;
+  border-radius: 12px;
+  padding: 12px 28px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: opacity 0.2s;
+}}
+.btn:hover {{ opacity: 0.9; }}
 </style>
 </head>
 <body>
 <div class="card">
-  <h1>✓ Autenticación exitosa</h1>
-  <p>Minerva se ha conectado correctamente a tu cuenta.<br>Puedes cerrar esta pestaña y volver al escritorio.</p>
+  <div class="icon">✓</div>
+  <h1>Autenticación Exitosa</h1>
+  <div class="subtitle">{srv_name}</div>
+  <p>Minerva se ha conectado correctamente a tu cuenta.<br>Tus herramientas ya están sincronizadas. Puedes cerrar esta pestaña y volver al escritorio.</p>
+  <button class="btn" onclick="window.close()">Cerrar Pestaña</button>
 </div>
 </body>
 </html>"""
@@ -482,13 +767,15 @@ p { color: #9b969c; font-size: 14px; line-height: 1.5; }
 
         # Canjear código por tokens
         try:
-            token_payload = {
+            token_payload: dict[str, Any] = {
                 "grant_type": "authorization_code",
                 "code": received_code[0],
                 "redirect_uri": redirect_uri,
                 "client_id": client_id,
                 "code_verifier": code_verifier,
             }
+            if resource:
+                token_payload["resource"] = resource
             if client_secret:
                 token_payload["client_secret"] = client_secret
 
@@ -515,11 +802,15 @@ p { color: #9b969c; font-size: 14px; line-height: 1.5; }
                         if refresh_token:
                             o["refresh_token"] = refresh_token
                         o["expires_at"] = time.time() + float(expires_in)
+                        if resource:
+                            o["resource"] = resource
                         s["auth_type"] = "oauth2"
+                        s["status"] = "connected"
+                        s["error_message"] = ""
                         self._save_servers()
 
                 emit({"type": "mcp_oauth_success", "server_id": server_id})
-                # Probar y actualizar lista de herramientas
+                # Probar y actualizar lista de herramientas automáticamente
                 self.test_and_refresh_server(server_id)
             else:
                 emit({
@@ -915,6 +1206,26 @@ p { color: #9b969c; font-size: 14px; line-height: 1.5; }
 
         except Exception as exc:
             error_str = str(exc)
+            # Si el fallo es por falta de autorización HTTP (401 / unauthorized)
+            if transport == "http" and ("401" in error_str or "unauthorized" in error_str.lower()):
+                print(f"[MCP] Servidor '{server.get('name')}' requiere autenticación. Detectando metadatos OAuth...")
+                oauth_meta = self.discover_oauth_metadata(server.get("url", ""))
+                if oauth_meta:
+                    with self._lock:
+                        server["auth_type"] = "oauth2"
+                        existing_oauth = server.setdefault("oauth2", {})
+                        for k, v in oauth_meta.items():
+                            if v and not existing_oauth.get(k):
+                                existing_oauth[k] = v
+                        server["status"] = "auth_required"
+                        server["error_message"] = "Requiere autenticación con tu cuenta. Haz clic en 'Conectar cuenta'."
+                        server["tools"] = []
+                        server["tool_count"] = 0
+                        self._tool_cache[server_id] = []
+                        self._save_servers()
+                    emit({"type": "mcp_servers_updated", "servers": self.get_servers()})
+                    return server
+
             with self._lock:
                 server["status"] = "error"
                 server["error_message"] = error_str

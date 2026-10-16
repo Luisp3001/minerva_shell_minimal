@@ -41,7 +41,7 @@ _KEYWORD_HINTS: dict[str, list[str]] = {
     "read_docx": ["leer word", "leer docx"],
     "read_pptx": ["powerpoint", "pptx", "diapositivas", "presentacion"],
     "read_excel": ["excel", "xlsx", "csv", "hoja de calculo", "tabla"],
-    "launch_app": ["abrir app", "lanzar aplicacion", "ejecutar programa", "desktop app"],
+    "launch_app": ["abrir app", "lanzar aplicacion", "ejecutar programa", "desktop app", "launcher", "juego", "game"],
 }
 
 
