@@ -316,7 +316,7 @@ def tool_check_job_status(job_id: str = "") -> str:
     """
     Consulta el estado de comandos en segundo plano registrados en el JobManager.
 
-    - Si se indica job_id, devuelve info detallada de ese job específico.
+    - Si se indica job_id, devuelve info detallada y salida en tiempo real de ese job.
     - Si no se indica (o job_id == ""), lista todos los jobs registrados.
     """
     if job_id:
@@ -326,22 +326,43 @@ def tool_check_job_status(job_id: str = "") -> str:
                 f"No se encontró ningún comando con job_id '{job_id}'. "
                 "Puede haber sido eliminado del registro."
             )
+        elapsed_str = f"{job.elapsed_seconds:.1f}s"
+        pid_str = f"{job.pid}" if job.pid else "no asignado / finalizado"
         lines = [
-            f"Job ID:      {job.job_id}",
-            f"Comando:     {job.command}",
-            f"Estado:      {job.status}",
-            f"Código ret.: {job.returncode}",
+            f"Job ID:          {job.job_id}",
+            f"Comando:         {job.command}",
+            f"Estado:          {job.status}",
+            f"PID:             {pid_str}",
+            f"Tiempo activo:   {elapsed_str}",
+            f"Código retorno:  {job.returncode if job.is_terminal else '(en ejecución)'}",
         ]
+
+        # Verificar estado a nivel de SO si está marcado como running
+        if job.status == "running" and job.pid:
+            try:
+                proc_path = pathlib.Path(f"/proc/{job.pid}")
+                if proc_path.exists():
+                    lines.append("Proceso SO:      Activo (corriendo en segundo plano)")
+                else:
+                    lines.append("Proceso SO:      Finalizando / drenando salida")
+            except Exception:
+                pass
+
         if job.output:
-            truncated = job.output[:1500]
-            lines.append(f"Salida:\n{truncated}")
-            if len(job.output) > 1500:
-                lines.append(
-                    "... (salida truncada, "
-                    f"{len(job.output)} caracteres totales)"
-                )
+            lines.append(f"\n--- Salida acumulada en tiempo real ({len(job.output)} caracteres totales) ---")
+            if len(job.output) > 2000:
+                lines.append("... [salida anterior omitida; mostrando el progreso reciente] ...")
+                lines.append(job.output[-2000:])
+            else:
+                lines.append(job.output)
+
+            if job.status == "running":
+                lines.append("\n(Nota: El comando sigue ejecutándose activamente; lo anterior es lo último generado)")
         else:
-            lines.append("Salida:      (vacía aún)")
+            if job.status == "running":
+                lines.append("Salida:          (El proceso aún no ha emitido texto en stdout/stderr)")
+            else:
+                lines.append("Salida:          (vacía)")
         return "\n".join(lines)
 
     # Listar todos los jobs
@@ -355,18 +376,16 @@ def tool_check_job_status(job_id: str = "") -> str:
     lines = [f"Comandos en segundo plano registrados ({len(all_jobs)} total):\n"]
     for j in all_jobs:
         in_turn = " [turno activo]" if j["in_turn"] else ""
+        elapsed = f" ({j.get('elapsed_seconds', 0)}s)" if "elapsed_seconds" in j else ""
+        pid_str = f" PID={j.get('pid')}" if j.get("pid") else ""
         lines.append(
-            f"  • [{j['status'].upper()}]{in_turn} "
+            f"  • [{j['status'].upper()}]{in_turn}{elapsed}{pid_str} "
             f"job_id={j['job_id']} → {j['command']}"
         )
-        if j["status"] in ("completed", "failed"):
-            rc_str = f"  returncode={j['returncode']}"
-            out_preview = (
-                j["output"][:200].replace("\n", " ")
-                if j["output"]
-                else "(sin salida)"
-            )
-            lines.append(f"    {rc_str}")
-            lines.append(f"    Salida: {out_preview}")
+        if j.get("output"):
+            out_preview = j["output"][-250:].replace("\n", " ").strip()
+            lines.append(f"    Última salida: ... {out_preview}")
+        else:
+            lines.append("    Salida: (sin salida generada aún)")
         lines.append("")
     return "\n".join(lines).strip()

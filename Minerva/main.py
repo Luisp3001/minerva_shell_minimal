@@ -57,7 +57,7 @@ MAX_HISTORY_MESSAGES = 100
 MAX_HISTORY_CHARS = 256 * 1024
 MAX_IMAGE_BYTES = 20 * 1024 * 1024
 MAX_TOOL_RESULT_CHARS = 8 * 1024
-COMMAND_TIMEOUT_SECONDS = 30 * 60
+COMMAND_TIMEOUT_SECONDS = 10 * 60
 COMMAND_MAX_PENDING = 8
 CHAT_MAX_PENDING = 4
 TRANSCRIPTION_MAX_PENDING = 2
@@ -374,7 +374,10 @@ def _submit_chat(context: ChatContext) -> bool:
 
 
 def _command_environment() -> dict[str, str]:
-    return safe_session_environment()
+    env = safe_session_environment()
+    env["PYTHONUNBUFFERED"] = "1"
+    env["DEBIAN_FRONTEND"] = "noninteractive"
+    return env
 
 
 def _emit_job_event(job: JobSnapshot, event: dict) -> None:
@@ -395,7 +398,6 @@ def _signal_process(process: subprocess.Popen, sig: signal.Signals) -> None:
 
 def _execute_command(job: JobSnapshot) -> None:
     process: subprocess.Popen | None = None
-    selector: selectors.BaseSelector | None = None
     timed_out = False
     try:
         raw_command = job.command.removeprefix("sudo ") if job.is_sudo else job.command
@@ -403,88 +405,87 @@ def _execute_command(job: JobSnapshot) -> None:
         command_args = ["pkexec", *shell_args] if job.is_sudo else shell_args
         process = subprocess.Popen(
             command_args,
+            stdin=subprocess.DEVNULL,
             stdout=subprocess.PIPE,
             stderr=subprocess.STDOUT,
-            bufsize=0,
             cwd=HOME,
             env=_command_environment(),
             start_new_session=True,
         )
         if not job_mgr.attach_process(job.job_id, process):
             _signal_process(process, signal.SIGTERM)
+            return
 
-        decoder = codecs.getincrementaldecoder("utf-8")(errors="replace")
-        selector = selectors.DefaultSelector()
-        assert process.stdout is not None
-        selector.register(process.stdout, selectors.EVENT_READ)
+        def _read_output() -> None:
+            try:
+                assert process is not None and process.stdout is not None
+                while True:
+                    chunk = os.read(process.stdout.fileno(), 4096)
+                    if not chunk:
+                        break
+                    text = chunk.decode("utf-8", errors="replace")
+                    job_mgr.append_output(job.job_id, text)
+            except Exception:
+                pass
+
+        reader_thread = threading.Thread(
+            target=_read_output,
+            name=f"cmd-reader-{job.job_id[:8]}",
+            daemon=True,
+        )
+        reader_thread.start()
+
         started_at = time.monotonic()
-        terminate_at: float | None = None
-
         while True:
             now = time.monotonic()
-            cancelled = job_mgr.should_cancel(job.job_id)
-            if now - started_at > COMMAND_TIMEOUT_SECONDS and not timed_out:
+            if now - started_at > COMMAND_TIMEOUT_SECONDS:
                 timed_out = True
-                job_mgr.append_output(job.job_id, "\n[Tiempo máximo excedido]\n")
                 _signal_process(process, signal.SIGTERM)
-                terminate_at = now + 3
-            elif cancelled and process.poll() is None and terminate_at is None:
-                _signal_process(process, signal.SIGTERM)
-                terminate_at = now + 3
-            elif terminate_at is not None and now >= terminate_at:
-                _signal_process(process, signal.SIGKILL)
-                terminate_at = None
-
-            events = selector.select(timeout=0.2)
-            for key, _ in events:
-                chunk = os.read(key.fileobj.fileno(), 4096)
-                if not chunk:
-                    selector.unregister(key.fileobj)
-                    continue
-                text = decoder.decode(chunk)
-                if text:
-                    captured = job_mgr.append_output(job.job_id, text)
-                    if captured:
-                        _emit_job_event(job, {
-                            "type": "command_output",
-                            "job_id": job.job_id,
-                            "command": job.command,
-                            "text": captured,
-                        })
-
-            if process.poll() is not None and not selector.get_map():
+                try:
+                    process.wait(timeout=2)
+                except subprocess.TimeoutExpired:
+                    _signal_process(process, signal.SIGKILL)
                 break
 
-        tail = decoder.decode(b"", final=True)
-        if tail:
-            captured = job_mgr.append_output(job.job_id, tail)
-            if captured:
-                _emit_job_event(job, {
-                    "type": "command_output",
-                    "job_id": job.job_id,
-                    "command": job.command,
-                    "text": captured,
-                })
-        returncode = process.wait()
+            if job_mgr.should_cancel(job.job_id):
+                _signal_process(process, signal.SIGTERM)
+                try:
+                    process.wait(timeout=2)
+                except subprocess.TimeoutExpired:
+                    _signal_process(process, signal.SIGKILL)
+                break
+
+            try:
+                process.wait(timeout=0.25)
+                break
+            except subprocess.TimeoutExpired:
+                continue
+
+        reader_thread.join(timeout=1.0)
+        returncode = process.poll()
+        if returncode is None:
+            returncode = 124 if timed_out else -1
+
+        if timed_out:
+            job_mgr.append_output(job.job_id, "\n\n[Tiempo máximo excedido]")
+
         success = returncode == 0 and not timed_out
         job_mgr.set_result(job.job_id, None, 124 if timed_out else returncode, success)
     except Exception as exc:
         if process is not None and process.poll() is None:
             _signal_process(process, signal.SIGKILL)
             try:
-                process.wait(timeout=3)
+                process.wait(timeout=2)
             except subprocess.TimeoutExpired:
                 pass
-        job_mgr.append_output(
-            job.job_id,
-            f"\nError ejecutando comando: {type(exc).__name__}: {exc}\n",
-        )
-        job_mgr.set_result(job.job_id, None, -1, False)
+        err_msg = f"\nError ejecutando comando: {type(exc).__name__}: {exc}\n"
+        job_mgr.set_result(job.job_id, err_msg, -1, False)
     finally:
-        if selector is not None:
-            selector.close()
         if process is not None and process.stdout is not None:
-            process.stdout.close()
+            try:
+                process.stdout.close()
+            except Exception:
+                pass
         msg_queue.put({"type": "_internal_cmd_done", "job_id": job.job_id})
         command_slots.release()
 
@@ -554,7 +555,7 @@ def _handle_command_done(msg: dict) -> None:
         "type": "command_result",
         "job_id": job.job_id,
         "command": job.command,
-        "output": job.output[:MAX_TOOL_RESULT_CHARS] or "(sin salida)",
+        "output": job.output or "(sin salida)",
         "returncode": job.returncode,
         "success": job.status == "completed",
         "cancelled": job.status == "cancelled",

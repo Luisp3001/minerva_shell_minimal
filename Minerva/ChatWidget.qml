@@ -271,52 +271,37 @@ Item {
                 addResultCard(msg.command || "", startJobId, "", "running")
                 break
             }
-            case "command_output": {
-                // Actualizar la result card correcta por job_id
-                var outJobId = msg.job_id || ""
-                for (var ri = aiWidget.msgModel.count - 1; ri >= 0; ri--) {
-                    var ritem = aiWidget.msgModel.get(ri)
-                    if (ritem.role === "result" && ritem.jobId === outJobId) {
-                        var combined = ritem.content + (msg.text || "")
-                        if (combined.length > 131072) {
-                            combined = combined.substring(0, 65536)
-                                + "\n[… salida recortada en la interfaz …]\n"
-                                + combined.substring(combined.length - 65536)
-                        }
-                        aiWidget.msgModel.setProperty(ri, "content", combined)
-                        break
-                    }
-                }
-                scrollToBottom()
+            case "command_output":
+                // Salida en vivo omitida para máxima estabilidad y rendimiento
                 break
-            }
             case "command_result": {
-                // Finalizar la result card correcta por job_id
+                // Finalizar todas las tarjetas asociadas al job_id sin corte prematuro
                 var resJobId = msg.job_id || ""
-                var found = false
+                var foundResult = false
+                var statusStr = msg.cancelled ? "cancelled" : ((msg.success !== false) ? "success" : "error")
+                var outStr = msg.output || "(sin salida)"
+
                 for (var resi = aiWidget.msgModel.count - 1; resi >= 0; resi--) {
                     var resitem = aiWidget.msgModel.get(resi)
-                    if (resitem.role === "command" && resitem.jobId === resJobId) {
-                        aiWidget.msgModel.setProperty(
-                            resi,
-                            "cmdStatus",
-                            msg.cancelled ? "cancelled" : "done"
-                        )
-                    }
-                    if (resitem.role === "result" && resitem.jobId === resJobId) {
-                        aiWidget.msgModel.setProperty(resi, "cmdStatus", (msg.success !== false) ? "success" : "error")
-                        // Volcar el output solo si la card estaba vacía (sin command_output previo)
-                        if (!resitem.content && msg.output) {
-                            aiWidget.msgModel.setProperty(resi, "content", msg.output)
+                    if (resitem.jobId === resJobId) {
+                        if (resitem.role === "command") {
+                            aiWidget.msgModel.setProperty(
+                                resi,
+                                "cmdStatus",
+                                msg.cancelled ? "cancelled" : "done"
+                            )
+                        } else if (resitem.role === "result") {
+                            aiWidget.msgModel.setProperty(resi, "cmdStatus", statusStr)
+                            aiWidget.msgModel.setProperty(resi, "content", outStr)
+                            foundResult = true
                         }
-                        found = true
-                        break
                     }
                 }
-                if (!found) {
+                if (!foundResult) {
                     // Fallback: crear result card directamente (no llegó command_start)
-                    addResultCard(msg.command || "", resJobId, msg.output || "", (msg.success !== false) ? "success" : "error")
+                    addResultCard(msg.command || "", resJobId, outStr, statusStr)
                 }
+                scrollToBottom()
                 break
             }
             case "error":
@@ -346,6 +331,7 @@ Item {
             return msg + "…"
         }
         if (t === "run_command") return "  Preparando comando…"
+        if (t === "search_tools") return "  Consultando herramientas…"
         if (t === "web_search") {
             let q = args && args.query ? args.query : ""
             return "󰖟  Buscando en internet" + (q ? ": " + q + "…" : "…")
@@ -757,18 +743,26 @@ Item {
                                    ? Qt.rgba(0.08, 0.28, 0.08, 0.55)
                                    : model.cmdStatus === "error"
                                      ? Qt.rgba(0.32, 0.07, 0.07, 0.55)
-                                     : Qt.rgba(0.08, 0.15, 0.32, 0.55))
-                                : Qt.rgba(1, 1, 1, 0.04)
+                                     : model.cmdStatus === "cancelled"
+                                       ? Qt.rgba(0.2, 0.2, 0.2, 0.45)
+                                       : Qt.rgba(0.08, 0.15, 0.32, 0.55))
+                                : (model.cmdStatus === "cancelled")
+                                  ? Qt.rgba(0.2, 0.2, 0.2, 0.3)
+                                  : Qt.rgba(1, 1, 1, 0.04)
                             border.width: 1
                             border.color: model.role === "result"
                                 ? (model.cmdStatus === "success"
                                    ? Qt.rgba(0.3, 0.7, 0.3, 0.3)
                                    : model.cmdStatus === "error"
                                      ? Qt.rgba(0.8, 0.3, 0.3, 0.3)
-                                     : Qt.rgba(0.3, 0.5, 0.8, 0.3))
+                                     : model.cmdStatus === "cancelled"
+                                       ? Qt.rgba(0.5, 0.5, 0.5, 0.3)
+                                       : Qt.rgba(0.3, 0.5, 0.8, 0.3))
                                 : (model.needsConfirm || model.needsSudo)
                                   ? Qt.rgba(0.95, 0.65, 0.22, 0.45)
-                                  : Qt.rgba(1, 1, 1, 0.09)
+                                  : (model.cmdStatus === "cancelled")
+                                    ? Qt.rgba(0.5, 0.5, 0.5, 0.2)
+                                    : Qt.rgba(1, 1, 1, 0.09)
 
                             Column {
                                 id: _cardCol
@@ -780,28 +774,32 @@ Item {
                                     Text {
                                         id: _resultIcon
                                         text: model.role === "result"
-                                            ? (model.cmdStatus === "success" ? "󰄬" : model.cmdStatus === "error" ? "󰅖" : "󰔟")
+                                            ? (model.cmdStatus === "success" ? "󰄬" : (model.cmdStatus === "error" ? "󰅖" : (model.cmdStatus === "cancelled" ? "󰜺" : "󰔟")))
+                                            : (model.cmdStatus === "cancelled") ? "󰜺"
                                             : model.needsSudo ? "󰌞"
                                             : model.needsConfirm ? "󰀦"
-                                            : "󰆍"
+                                            : (model.cmdStatus === "running" ? "󰔟" : "󰆍")
                                         font.family: Theme.fontMono
                                         font.pixelSize: 13
                                         color: model.role === "result"
-                                            ? (model.cmdStatus === "success" ? Theme.success : model.cmdStatus === "error" ? Theme.danger : Theme.accent)
+                                            ? (model.cmdStatus === "success" ? Theme.success : (model.cmdStatus === "error" ? Theme.danger : (model.cmdStatus === "cancelled" ? Theme.textMuted : Theme.accent)))
+                                            : (model.cmdStatus === "cancelled") ? Theme.textMuted
                                             : (model.needsSudo || model.needsConfirm) ? Theme.warning : Theme.accent
                                         anchors.verticalCenter: parent.verticalCenter
                                         SequentialAnimation on rotation {
-                                            running: model.role === "result" && model.cmdStatus === "running"
+                                            running: (model.role === "result" || model.role === "command") && model.cmdStatus === "running"
                                             loops: Animation.Infinite
                                             NumberAnimation { to: 360; duration: 900; easing.type: Easing.Linear }
                                             onStopped: _resultIcon.rotation = 0
                                         }
                                     }
                                     Text {
-                                        text: model.role === "result" ? (model.cmdStatus === "running" ? "Ejecutando..." : "Resultado")
+                                        text: model.role === "result"
+                                            ? (model.cmdStatus === "running" ? "Ejecutando..." : (model.cmdStatus === "cancelled" ? "Cancelado" : "Resultado"))
+                                            : (model.cmdStatus === "cancelled") ? "Cancelado"
                                             : model.needsSudo ? "Requiere sudo (pkexec)"
                                             : model.needsConfirm ? "Confirmar antes de ejecutar"
-                                            : "Ejecutar comando"
+                                            : (model.cmdStatus === "running" ? "Ejecutando..." : "Comando")
                                         font.family: Theme.fontSans; font.pixelSize: 11; font.weight: Font.Bold
                                         color: Theme.textMuted; anchors.verticalCenter: parent.verticalCenter
                                     }
@@ -894,16 +892,33 @@ Item {
                                 }
 
                                 Row {
-                                    visible: model.role === "command" && model.cmdStatus === "running"; spacing: 6
+                                    visible: (model.role === "command" || model.role === "result") && model.cmdStatus === "running"
+                                    spacing: 8
                                     Text {
                                         id: _runningIcon; text: "󰔟"; font.family: Theme.fontMono; font.pixelSize: 13; color: Theme.accent; anchors.verticalCenter: parent.verticalCenter
                                         SequentialAnimation on rotation { running: parent.visible; loops: Animation.Infinite; NumberAnimation { to: 360; duration: 900; easing.type: Easing.Linear } onStopped: _runningIcon.rotation = 0 }
                                     }
                                     Text { text: "Ejecutando…"; font.family: Theme.fontSans; font.pixelSize: 12; color: Theme.accent; anchors.verticalCenter: parent.verticalCenter }
+                                    Rectangle {
+                                        height: 24; width: _cancelRunLbl.implicitWidth + 16; radius: 6
+                                        color: _cancelRunMa.containsMouse ? Qt.rgba(0.4,0.1,0.1,0.6) : Qt.rgba(0.22,0.05,0.05,0.5)
+                                        border.width: 1; border.color: Qt.rgba(Theme.danger.r, Theme.danger.g, Theme.danger.b, 0.5)
+                                        Text { id: _cancelRunLbl; anchors.centerIn: parent; text: "Cancelar"; font.family: Theme.fontSans; font.pixelSize: 11; color: Theme.danger }
+                                        MouseArea {
+                                            id: _cancelRunMa; anchors.fill: parent; hoverEnabled: true; cursorShape: Qt.PointingHandCursor
+                                            onClicked: {
+                                                root.aiWidget.msgModel.setProperty(index, "cmdStatus", "cancelled")
+                                                if (model.jobId) {
+                                                    root.aiWidget.cancelJob(model.jobId)
+                                                }
+                                            }
+                                        }
+                                    }
                                 }
 
                                 Row {
-                                    visible: model.role === "command" && model.cmdStatus === "cancelled"; spacing: 6
+                                    visible: (model.role === "command" || model.role === "result") && model.cmdStatus === "cancelled"
+                                    spacing: 6
                                     Text { text: "󰜺"; font.family: Theme.fontMono; font.pixelSize: 12; color: Theme.textMuted; anchors.verticalCenter: parent.verticalCenter }
                                     Text { text: "Cancelado"; font.family: Theme.fontSans; font.pixelSize: 12; color: Theme.textMuted; anchors.verticalCenter: parent.verticalCenter }
                                 }

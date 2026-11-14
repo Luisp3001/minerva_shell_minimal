@@ -33,10 +33,18 @@ class JobSnapshot:
     output_truncated: bool
     turn_id: str = ""
     in_turn: bool = False
+    pid: int | None = None
+    created_at: float = 0.0
+    finished_at: float | None = None
 
     @property
     def is_terminal(self) -> bool:
         return self.status in TERMINAL_STATES
+
+    @property
+    def elapsed_seconds(self) -> float:
+        end = self.finished_at if self.finished_at is not None else time.time()
+        return max(0.0, end - self.created_at) if self.created_at else 0.0
 
 
 class CommandJob:
@@ -127,6 +135,9 @@ class JobManager:
             output_truncated=job._output_truncated,
             turn_id=job.turn_id,
             in_turn=job.job_id in self._active_turn_job_ids_locked(),
+            pid=job.process.pid if job.process else None,
+            created_at=job.created_at,
+            finished_at=job.finished_at,
         )
 
     def _prune_locked(self) -> None:
@@ -229,7 +240,7 @@ class JobManager:
             job = self._jobs.get(job_id)
             if not job:
                 return None
-            if output and not job._output_parts:
+            if output:
                 self.append_output(job_id, output)
             job.process = None
             if job.status != "cancelled":
@@ -382,8 +393,10 @@ class JobManager:
                     "command": snapshot.command,
                     "status": snapshot.status,
                     "returncode": snapshot.returncode,
-                    "output": snapshot.output[:1024],
+                    "output": snapshot.output[-1024:],
                     "in_turn": snapshot.in_turn,
+                    "pid": snapshot.pid,
+                    "elapsed_seconds": round(snapshot.elapsed_seconds, 1),
                 }
                 for snapshot in map(self._snapshot, self._jobs.values())
             ]
