@@ -37,7 +37,11 @@ SYSTEM_PROMPT_BASE = f"""## Reglas CRÍTICAS de comunicación
 
 ## Herramientas disponibles
 - **Búsqueda y activación de herramientas** (search_tools): Si necesitas una herramienta o capacidad que no está cargada en tus funciones actuales (como ejecutar comandos en terminal con run_command, controlar Spotify, mover ventanas en Hyprland, crear Word, tomar capturas de pantalla, o usar servidores MCP externos), llama inmediatamente a search_tools con lo que necesitas para activarla en tu contexto.
-- **Filesystem**: Puedes listar directorios (list_dir), leer archivos (read_file, read_pdf, read_docx, read_pptx, read_excel), inspeccionar metadatos (file_info), crear/sobreescribir archivos (write_file), crear documentos Word desde markdown (create_docx), modificar documentos Word añadiendo texto (modify_docx) y editar líneas específicas (replace_lines) dentro de {HOME}. IMPORTANTE: Para cualquier archivo PDF, DOCX, PPTX o Excel usa SIEMPRE la herramienta específica. Si debes crear o modificar Word, llama directamente a create_docx o modify_docx (búscalas con search_tools si no están cargadas): NUNCA escribas ni ejecutes un script Python, ni uses run_command, Bash o LibreOffice para sustituir esas herramientas. create_docx ya aplica una plantilla editorial cuidada y acepta Markdown internamente aunque tus respuestas al usuario sean texto plano. Para archivos grandes de texto, primero usa file_info para conocer el total de líneas, luego lee con read_file en bloques (start_line, end_line) de hasta 200 líneas. Usa replace_lines para ediciones quirúrgicas sin reescribir el archivo completo. Si intentas leer o editar más allá del final del archivo, recibirás una señal [EOF]. Para buscar información concreta dentro de un PDF/DOCX/PPTX largo sin leerlo completo, usa query_document con una pregunta específica (RAG efímero). Para MD/TXT usa read_file; para Excel/CSV usa read_excel.
+- **Filesystem**: Herramientas integradas para navegar, inspeccionar y manipular archivos dentro de {HOME}:
+  - Listado y estructura: `list_dir` (lista contenidos directos de una carpeta) y `directory_tree` (vista jerárquica en árbol tipo tree hasta cierta profundidad, ideal para ver la estructura de proyectos enteros de un solo golpe).
+  - Búsqueda de archivos y contenido: `find_files` (búsqueda ultrarrápida de archivos o carpetas por nombre o patrón glob basada en fd/find) y `grep_search` (búsqueda rápida de contenido con ripgrep dentro de archivos por texto o regex). Úsalas para localizar rápidamente archivos o funciones sin tener que navegar carpeta por carpeta.
+  - Lectura e inspección: `read_file` (lee rangos de líneas), `file_info` (total de líneas y tamaño) y herramientas especializadas para documentos (`read_pdf`, `read_docx`, `read_pptx`, `read_excel`, `query_document`).
+  - Escritura y edición: `write_file` (crear o sobreescribir archivos completos) y `replace_lines` (edición quirúrgica de archivos de texto y código). IMPORTANTE sobre `replace_lines`: ahora soporta búsqueda por fragmento de código (`target`) y reemplazo (`replacement`) con búsqueda difusa (fuzzy search) tolerante a indentación y pequeñas variaciones, por lo que NO necesitas contar líneas manualmente; simplemente pasa el fragmento que quieres reemplazar y el nuevo contenido. También admite `start_line` y `end_line` si prefieres editar por rango de líneas. Si intentas leer o editar más allá del final del archivo, recibirás una señal [EOF]. Para cualquier archivo PDF, DOCX, PPTX o Excel usa SIEMPRE la herramienta específica. Si debes crear o modificar Word, llama directamente a create_docx o modify_docx (búscalas con search_tools si no están cargadas): NUNCA escribas ni ejecutes un script Python, ni uses run_command, Bash o LibreOffice para sustituir esas herramientas. create_docx ya aplica una plantilla editorial cuidada y acepta Markdown internamente aunque tus respuestas al usuario sean texto plano. Para buscar información concreta dentro de un PDF/DOCX/PPTX largo sin leerlo completo, usa query_document con una pregunta específica (RAG efímero). Para MD/TXT usa read_file; para Excel/CSV usa read_excel.
 - **Comandos de terminal** (run_command): Puedes proponer comandos bash cuando la tarea REQUIERA estrictamente ejecución en shell (como instalar paquetes, git, systemctl, procesos o compilación). NO uses run_command para leer, listar o editar archivos (usa read_file, list_dir, replace_lines) ni para manipular documentos. Si run_command no está cargado en tus herramientas ejecutables, actívalo con search_tools. Todos los comandos requieren confirmación explícita del usuario; los que usan sudo se autentican con pkexec. Tras aprobarse, se ejecutan en segundo plano de forma asíncrona y puedes usar check_job_status para consultar su estado, salida y código de retorno.
 - **Búsqueda web** (web_search): Tienes acceso a internet en tiempo real. Úsala cuando:
   - El usuario pregunte por noticias, eventos recientes o información que puede haber cambiado.
@@ -131,6 +135,9 @@ SYSTEM_PROMPT = get_system_prompt("minerva")
 CORE_TOOL_NAMES = {
     "search_tools",
     "list_dir",
+    "directory_tree",
+    "find_files",
+    "grep_search",
     "read_file",
     "write_file",
     "replace_lines",
@@ -221,6 +228,114 @@ TOOL_DEFINITIONS = [
                 "required": ["path"]
             }
         }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "directory_tree",
+            "description": (
+                "Genera una vista visual en árbol de la estructura de un directorio hasta una profundidad configurable. "
+                "Permite comprender de un vistazo la organización completa de un proyecto o carpeta sin tener que hacer múltiples llamadas a list_dir."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "path": {
+                        "type": "string",
+                        "description": "Ruta absoluta del directorio a inspeccionar en forma de árbol. Por defecto $HOME.",
+                    },
+                    "max_depth": {
+                        "type": "integer",
+                        "minimum": 1,
+                        "maximum": 5,
+                        "description": "Profundidad máxima de niveles de carpetas a explorar. Por defecto 2.",
+                    },
+                    "show_hidden": {
+                        "type": "boolean",
+                        "description": "Si es True, incluye archivos y carpetas ocultos (excepto .git). Por defecto False.",
+                    },
+                    "dirs_only": {
+                        "type": "boolean",
+                        "description": "Si es True, solo muestra carpetas y omite archivos. Por defecto False.",
+                    },
+                },
+                "required": [],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "find_files",
+            "description": (
+                "Busca archivos y directorios rápidamente por nombre o patrón glob usando fd o find. "
+                "Ideal para localizar archivos en proyectos grandes sin tener que explorar carpeta por carpeta con list_dir."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "pattern": {
+                        "type": "string",
+                        "description": "Nombre, subcadena o patrón glob del archivo o carpeta a buscar (ej: '*.qml', 'settings', 'config.json').",
+                    },
+                    "path": {
+                        "type": "string",
+                        "description": "Ruta del directorio donde iniciar la búsqueda. Por defecto $HOME.",
+                    },
+                    "file_type": {
+                        "type": "string",
+                        "enum": ["all", "file", "directory"],
+                        "description": "Tipo de elemento a buscar: 'all' (ambos), 'file' (solo archivos) o 'directory' (solo carpetas). Por defecto 'all'.",
+                    },
+                    "max_results": {
+                        "type": "integer",
+                        "minimum": 1,
+                        "maximum": 200,
+                        "description": "Número máximo de resultados a retornar. Por defecto 50.",
+                    },
+                },
+                "required": ["pattern"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "grep_search",
+            "description": (
+                "Busca texto o expresiones regulares dentro de archivos en un directorio usando ripgrep (rg). "
+                "Es extremadamente rápida y eficiente para encontrar definiciones de funciones, clases, variables, "
+                "mensajes de error o cualquier cadena de texto en proyectos completos sin tener que leer archivo por archivo."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "query": {
+                        "type": "string",
+                        "description": "Texto o expresión regular a buscar dentro de los archivos",
+                    },
+                    "path": {
+                        "type": "string",
+                        "description": "Ruta del directorio o archivo específico donde buscar. Por defecto $HOME.",
+                    },
+                    "glob": {
+                        "type": "string",
+                        "description": "Filtro opcional de archivos por patrón glob (ej: '*.py', '*.qml', '*.md').",
+                    },
+                    "case_sensitive": {
+                        "type": "boolean",
+                        "description": "Si es True, la búsqueda distingue mayúsculas y minúsculas. Por defecto False.",
+                    },
+                    "max_results": {
+                        "type": "integer",
+                        "minimum": 1,
+                        "maximum": 200,
+                        "description": "Número máximo de coincidencias a retornar. Por defecto 50.",
+                    },
+                },
+                "required": ["query"],
+            },
+        },
     },
     {
         "type": "function",
@@ -341,7 +456,12 @@ TOOL_DEFINITIONS = [
         "type": "function",
         "function": {
             "name": "replace_lines",
-            "description": "Reemplaza un rango de líneas específicas en un archivo existente sin tocar el resto. Equivalente a un patch quirúrgico. Ideal para editar funciones, corregir errores o modificar configuraciones sin reescribir el archivo completo. Usará el número de línea exacto que viste con read_file.",
+            "description": (
+                "Modifica un archivo existente reemplazando un fragmento de código o un rango de líneas. "
+                "Permite buscar un fragmento específico ('target') y sustituirlo por el nuevo contenido ('replacement') "
+                "usando búsqueda difusa (fuzzy search) tolerante a indentación y espacios, sin requerir contar líneas manualmente. "
+                "También admite especificar 'start_line' y 'end_line' si se prefiere reemplazar por número de línea."
+            ),
             "parameters": {
                 "type": "object",
                 "properties": {
@@ -349,22 +469,30 @@ TOOL_DEFINITIONS = [
                         "type": "string",
                         "description": "Ruta absoluta del archivo a modificar"
                     },
+                    "target": {
+                        "type": "string",
+                        "description": "Fragmento exacto o aproximado de texto o código a reemplazar. Incluye 1 o 2 líneas de contexto circundante si es necesario para asegurar que sea único."
+                    },
+                    "replacement": {
+                        "type": "string",
+                        "description": "Nuevo texto o código que reemplazará al fragmento encontrado."
+                    },
+                    "new_content": {
+                        "type": "string",
+                        "description": "Alias de 'replacement' para compatibilidad retroactiva."
+                    },
                     "start_line": {
                         "type": "integer",
                         "minimum": 1,
-                        "description": "Primera línea a reemplazar (1-indexado, inclusivo)"
+                        "description": "(Opcional) Primera línea a reemplazar (1-indexado). Úsalo solo si reemplazas por número de línea en lugar de por fragmento."
                     },
                     "end_line": {
                         "type": "integer",
                         "minimum": 1,
-                        "description": "Última línea a reemplazar (1-indexado, inclusivo)"
-                    },
-                    "new_content": {
-                        "type": "string",
-                        "description": "Texto de reemplazo. Puede contener múltiples líneas separadas por \\n."
+                        "description": "(Opcional) Última línea a reemplazar (1-indexado, inclusivo)."
                     }
                 },
-                "required": ["path", "start_line", "end_line", "new_content"]
+                "required": ["path"]
             }
         }
     },

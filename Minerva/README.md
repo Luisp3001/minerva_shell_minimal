@@ -284,10 +284,13 @@ El nombre visible del chat también sigue el perfil activo. La selección se gua
 | Herramienta       | Archivo                | Descripción                                                      |
 |-------------------|------------------------|------------------------------------------------------------------|
 | `list_dir`        | `tools/filesystem.py`  | Lista el contenido de un directorio (dentro de $HOME)            |
+| `directory_tree`  | `tools/filesystem.py`  | Vista jerárquica en árbol (`tree`) de estructuras de proyectos    |
+| `find_files`      | `tools/filesystem.py`  | Búsqueda ultrarrápida de archivos/carpetas por nombre (`fd`/`find`)|
+| `grep_search`     | `tools/filesystem.py`  | Búsqueda de contenido (texto/regex) en archivos con ripgrep (`rg`)|
 | `file_info`       | `tools/filesystem.py`  | Devuelve metadatos del archivo (total de líneas y tamaño)        |
 | `read_file`       | `tools/filesystem.py`  | Lee un archivo por rangos de líneas (`start_line`, `end_line`)   |
 | `write_file`      | `tools/filesystem.py`  | Crea o sobreescribe un archivo de forma directa (`overwrite`)    |
-| `replace_lines`   | `tools/filesystem.py`  | Reemplazo quirúrgico de líneas específicas en un archivo         |
+| `replace_lines`   | `tools/filesystem.py`  | Edición quirúrgica con búsqueda difusa (fuzzy match) o por líneas |
 | `read_pdf`        | `tools/filesystem.py`  | Extrae texto de un PDF a Markdown (vía MarkItDown)              |
 | `read_docx`       | `tools/filesystem.py`  | Extrae contenido de un archivo Word (.docx) a Markdown           |
 | `read_pptx`       | `tools/filesystem.py`  | Extrae texto de presentaciones PowerPoint (.pptx) a Markdown     |

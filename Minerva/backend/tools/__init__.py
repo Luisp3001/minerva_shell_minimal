@@ -19,7 +19,10 @@ from .definitions import (
 )
 from .filesystem import (
     tool_create_docx,
+    tool_directory_tree,
     tool_file_info,
+    tool_find_files,
+    tool_grep_search,
     tool_list_dir,
     tool_modify_docx,
     tool_query_document,
@@ -186,6 +189,37 @@ def _list_dir(args: dict, _context: ToolContext):
     return tool_list_dir(args.get("path", HOME))
 
 
+@_registry.register("directory_tree")
+def _directory_tree(args: dict, _context: ToolContext):
+    return tool_directory_tree(
+        path=args.get("path", ""),
+        max_depth=args.get("max_depth", 2),
+        show_hidden=args.get("show_hidden", False),
+        dirs_only=args.get("dirs_only", False),
+    )
+
+
+@_registry.register("find_files")
+def _find_files(args: dict, _context: ToolContext):
+    return tool_find_files(
+        pattern=args.get("pattern", ""),
+        path=args.get("path", ""),
+        file_type=args.get("file_type", "all"),
+        max_results=args.get("max_results", 50),
+    )
+
+
+@_registry.register("grep_search")
+def _grep_search(args: dict, _context: ToolContext):
+    return tool_grep_search(
+        query=args.get("query", ""),
+        path=args.get("path", ""),
+        glob=args.get("glob", ""),
+        case_sensitive=args.get("case_sensitive", False),
+        max_results=args.get("max_results", 50),
+    )
+
+
 @_registry.register("read_file")
 def _read_file(args: dict, _context: ToolContext):
     return tool_read_file(
@@ -213,9 +247,11 @@ def _write_file(args: dict, _context: ToolContext):
 def _replace_lines(args: dict, _context: ToolContext):
     return tool_replace_lines(
         path=args.get("path", ""),
-        start_line=args.get("start_line", 1),
-        end_line=args.get("end_line", 1),
-        new_content=args.get("new_content", ""),
+        target=args.get("target"),
+        replacement=args.get("replacement"),
+        start_line=args.get("start_line"),
+        end_line=args.get("end_line"),
+        new_content=args.get("new_content"),
     )
 
 

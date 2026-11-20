@@ -6,13 +6,17 @@ Herramientas de sistema de archivos para Minerva.
 Todas las funciones reciben rutas y retornan strings (resultado o error).
 La validación de seguridad (is_safe_path) se aplica en todas las operaciones.
 """
+import difflib
+import fnmatch
 import json
 import os
 import pathlib
+import re
 import shutil
 import subprocess
 import sys
 import tempfile
+import textwrap
 import zipfile
 
 from ..core.config import HOME, MAX_DIR
@@ -188,6 +192,366 @@ def tool_list_dir(path: str) -> str:
         return "\n".join(lines)[:MAX_DIR]
     except (OSError, ValueError) as e:
         return f"Error al listar directorio: {e}"
+
+
+def _python_directory_tree(
+    search_path: pathlib.Path,
+    max_depth: int,
+    show_hidden: bool,
+    dirs_only: bool,
+    max_entries: int = 200,
+) -> str:
+    ignored_dirs = {".git", "node_modules", "__pycache__", ".venv"}
+    lines = [str(search_path)]
+    entries_count = 0
+
+    def _walk(directory: pathlib.Path, prefix: str, current_depth: int):
+        nonlocal entries_count
+        if current_depth > max_depth or entries_count >= max_entries:
+            return
+
+        try:
+            items = []
+            with os.scandir(directory) as it:
+                for entry in it:
+                    name = entry.name
+                    if not show_hidden and name.startswith("."):
+                        continue
+                    if name in ignored_dirs:
+                        continue
+                    is_d = entry.is_dir(follow_symlinks=False)
+                    if dirs_only and not is_d:
+                        continue
+                    items.append((name, is_d, entry.path))
+            items.sort(key=lambda x: (not x[1], x[0].lower()))
+
+            total = len(items)
+            for idx, (name, is_d, full_path) in enumerate(items):
+                if entries_count >= max_entries:
+                    lines.append(f"{prefix}… [árbol truncado a {max_entries} entradas]")
+                    return
+                entries_count += 1
+                is_last = (idx == total - 1)
+                connector = "└── " if is_last else "├── "
+                display_name = f"{name}/" if is_d else name
+                lines.append(f"{prefix}{connector}{display_name}")
+
+                if is_d:
+                    extension = "    " if is_last else "│   "
+                    _walk(pathlib.Path(full_path), prefix + extension, current_depth + 1)
+        except (OSError, PermissionError):
+            pass
+
+    _walk(search_path, "", 1)
+    return "\n".join(lines)[:MAX_DIR]
+
+
+def tool_directory_tree(
+    path: str = "",
+    max_depth: int = 2,
+    show_hidden: bool = False,
+    dirs_only: bool = False,
+) -> str:
+    """Genera una vista visual en árbol de la jerarquía de un directorio."""
+    try:
+        search_path = _safe_path(path) if path else pathlib.Path(HOME)
+        exp = str(search_path)
+        if not search_path.exists():
+            return f"No existe: {exp}"
+        if not search_path.is_dir():
+            return f"Error: no es un directorio: {exp}"
+
+        max_depth = max(1, min(int(max_depth), 5))
+
+        tree_bin = shutil.which("tree")
+        if tree_bin:
+            cmd = [
+                tree_bin,
+                exp,
+                "-L",
+                str(max_depth),
+                "--noreport",
+                "-I",
+                ".git|node_modules|__pycache__|.venv",
+            ]
+            if dirs_only:
+                cmd.append("-d")
+            if show_hidden:
+                cmd.append("-a")
+
+            try:
+                proc = subprocess.run(
+                    cmd, capture_output=True, text=True, timeout=10
+                )
+                if proc.returncode == 0:
+                    lines = proc.stdout.splitlines()
+                    if len(lines) > 200:
+                        lines = lines[:200]
+                        lines.append("… [árbol truncado a 200 entradas para conservar contexto]")
+                    result = "\n".join(lines)
+                    if len(result) > MAX_DIR:
+                        result = result[:MAX_DIR] + "\n… [árbol truncado]"
+                    return result
+            except subprocess.TimeoutExpired:
+                return "Error: tree superó el tiempo límite de espera (10s)."
+
+        return _python_directory_tree(search_path, max_depth, show_hidden, dirs_only)
+    except (OSError, ValueError) as e:
+        return f"Error en directory_tree: {e}"
+
+
+def _python_find_files(
+    search_path: pathlib.Path,
+    pattern: str,
+    file_type: str,
+    max_results: int,
+) -> str:
+    ignored_dirs = {".git", "node_modules", "__pycache__", ".venv"}
+    results = []
+    glob_pattern = pattern if any(c in pattern for c in "*?[]") else f"*{pattern}*"
+
+    for root, dirs, files in os.walk(search_path):
+        dirs[:] = [d for d in dirs if d not in ignored_dirs]
+        if file_type in ("all", "directory"):
+            for d in dirs:
+                if fnmatch.fnmatch(d.lower(), glob_pattern.lower()):
+                    results.append(f"[d] {os.path.join(root, d)}")
+                    if len(results) >= max_results:
+                        break
+        if file_type in ("all", "file"):
+            for f in files:
+                if fnmatch.fnmatch(f.lower(), glob_pattern.lower()):
+                    results.append(f"[f] {os.path.join(root, f)}")
+                    if len(results) >= max_results:
+                        break
+        if len(results) >= max_results:
+            break
+
+    if not results:
+        return f"No se encontraron archivos ni carpetas que coincidan con '{pattern}' en {search_path}"
+
+    return f"Encontrados {len(results)} resultado(s) para '{pattern}' en {search_path}:\n" + "\n".join(results)
+
+
+def tool_find_files(
+    pattern: str,
+    path: str = "",
+    file_type: str = "all",
+    max_results: int = 50,
+) -> str:
+    """Busca archivos o directorios rápidamente por nombre o patrón glob usando fd o find."""
+    try:
+        pattern = str(pattern).strip()
+        if not pattern:
+            return "Error: el parámetro 'pattern' no puede estar vacío."
+
+        search_path = _safe_path(path) if path else pathlib.Path(HOME)
+        exp = str(search_path)
+        if not search_path.exists():
+            return f"No existe: {exp}"
+        if not search_path.is_dir():
+            return f"Error: la ruta debe ser un directorio: {exp}"
+
+        max_results = max(1, min(int(max_results), 200))
+        file_type = file_type.lower() if file_type in ("all", "file", "directory") else "all"
+
+        fd_bin = shutil.which("fd") or shutil.which("fdfind")
+        if fd_bin:
+            cmd = [
+                fd_bin,
+                "--color=never",
+                "--hidden",
+                "--exclude", ".git",
+                "--exclude", "node_modules",
+                "--exclude", ".venv",
+                "--exclude", "__pycache__",
+                "--max-results", str(max_results),
+            ]
+            if file_type == "file":
+                cmd.extend(["-t", "f"])
+            elif file_type == "directory":
+                cmd.extend(["-t", "d"])
+            cmd.extend([pattern, exp])
+
+            try:
+                proc = subprocess.run(cmd, capture_output=True, text=True, timeout=15)
+                lines = [l for l in proc.stdout.splitlines() if l.strip()]
+                if not lines:
+                    return f"No se encontraron archivos ni carpetas que coincidan con '{pattern}' en {exp}"
+                formatted = []
+                for p_str in lines[:max_results]:
+                    try:
+                        p_obj = pathlib.Path(p_str)
+                        k = "d" if p_obj.is_dir() else "f"
+                        formatted.append(f"[{k}] {p_str}")
+                    except OSError:
+                        formatted.append(f"[?] {p_str}")
+                return f"Encontrados {len(formatted)} resultado(s) para '{pattern}' en {exp}:\n" + "\n".join(formatted)
+            except subprocess.TimeoutExpired:
+                return "Error: la búsqueda de archivos superó el tiempo límite (15s)."
+
+        find_bin = shutil.which("find")
+        if find_bin:
+            glob_pattern = pattern if any(c in pattern for c in "*?[]") else f"*{pattern}*"
+            cmd = [
+                find_bin, exp,
+                "-type", "d", "(",
+                "-name", ".git", "-o",
+                "-name", "node_modules", "-o",
+                "-name", ".venv", "-o",
+                "-name", "__pycache__",
+                ")", "-prune",
+                "-o",
+            ]
+            if file_type == "file":
+                cmd.extend(["-type", "f"])
+            elif file_type == "directory":
+                cmd.extend(["-type", "d"])
+            cmd.extend(["-iname", glob_pattern, "-print"])
+
+            try:
+                proc = subprocess.run(cmd, capture_output=True, text=True, timeout=15)
+                lines = [l for l in proc.stdout.splitlines() if l.strip()]
+                if not lines:
+                    return f"No se encontraron archivos ni carpetas que coincidan con '{pattern}' en {exp}"
+                lines = lines[:max_results]
+                formatted = []
+                for p_str in lines:
+                    try:
+                        p_obj = pathlib.Path(p_str)
+                        k = "d" if p_obj.is_dir() else "f"
+                        formatted.append(f"[{k}] {p_str}")
+                    except OSError:
+                        formatted.append(f"[?] {p_str}")
+                return f"Encontrados {len(formatted)} resultado(s) para '{pattern}' en {exp}:\n" + "\n".join(formatted)
+            except subprocess.TimeoutExpired:
+                return "Error: la búsqueda find superó el tiempo límite (15s)."
+
+        return _python_find_files(search_path, pattern, file_type, max_results)
+    except (OSError, ValueError) as e:
+        return f"Error en find_files: {e}"
+
+
+def _python_grep_search(
+    query: str,
+    search_path: pathlib.Path,
+    glob_pattern: str,
+    case_sensitive: bool,
+    max_results: int,
+) -> str:
+    flags = 0 if case_sensitive else re.IGNORECASE
+    try:
+        regex = re.compile(query, flags)
+    except re.error:
+        regex = re.compile(re.escape(query), flags)
+
+    ignored_dirs = {".git", "node_modules", "__pycache__", ".venv"}
+    results = []
+
+    def _search_single_file(f_path: pathlib.Path):
+        try:
+            if f_path.stat().st_size > 10 * 1024 * 1024:
+                return
+            with open(f_path, "r", encoding="utf-8", errors="replace") as f:
+                for line_idx, line in enumerate(f, 1):
+                    if regex.search(line):
+                        clean_line = line.rstrip("\r\n")[:250]
+                        results.append(f"{f_path}:{line_idx}: {clean_line}")
+                        if len(results) >= max_results:
+                            return
+        except (OSError, UnicodeError):
+            pass
+
+    if search_path.is_file():
+        _search_single_file(search_path)
+    else:
+        for root, dirs, files in os.walk(search_path):
+            dirs[:] = [d for d in dirs if d not in ignored_dirs and not d.startswith(".")]
+            for f in files:
+                if glob_pattern and not fnmatch.fnmatch(f, glob_pattern):
+                    continue
+                _search_single_file(pathlib.Path(root) / f)
+                if len(results) >= max_results:
+                    break
+            if len(results) >= max_results:
+                break
+
+    if not results:
+        return f"No se encontraron coincidencias para '{query}' en {search_path}"
+
+    truncated = f"\n… [mostrando primeros {max_results} resultados]" if len(results) >= max_results else ""
+    return f"Coincidencias encontradas ({len(results)}) para '{query}' en {search_path}:\n" + "\n".join(results) + truncated
+
+
+def tool_grep_search(
+    query: str,
+    path: str = "",
+    glob: str = "",
+    case_sensitive: bool = False,
+    max_results: int = 50,
+) -> str:
+    """Busca texto o expresiones regulares dentro de archivos usando ripgrep (rg)."""
+    try:
+        query = str(query).strip()
+        if not query:
+            return "Error: el parámetro 'query' no puede estar vacío."
+
+        search_path = _safe_path(path) if path else pathlib.Path(HOME)
+        exp = str(search_path)
+        if not search_path.exists():
+            return f"No existe: {exp}"
+
+        max_results = max(1, min(int(max_results), 200))
+
+        rg_bin = shutil.which("rg")
+        if rg_bin:
+            cmd = [
+                rg_bin,
+                "--color=never",
+                "--line-number",
+                "--no-heading",
+                f"--max-count={max_results}",
+                "--max-columns=250",
+                "--max-filesize=10M",
+                "-g", "!.git/*",
+                "-g", "!node_modules/*",
+                "-g", "!__pycache__/*",
+                "-g", "!.venv/*",
+            ]
+            if not case_sensitive:
+                cmd.append("-i")
+            if glob:
+                cmd.extend(["-g", glob])
+            cmd.extend(["--", query, exp])
+
+            try:
+                proc = subprocess.run(
+                    cmd,
+                    capture_output=True,
+                    text=True,
+                    timeout=15,
+                )
+                if proc.returncode == 1:
+                    return f"No se encontraron coincidencias para '{query}' en {exp}"
+                if proc.returncode == 0:
+                    lines = [l for l in proc.stdout.splitlines() if l.strip()]
+                    total = len(lines)
+                    truncated = ""
+                    if total > max_results:
+                        lines = lines[:max_results]
+                        truncated = f"\n… [mostrando primeros {max_results} de {total} resultados]"
+                    output = "\n".join(lines)
+                    if len(output) > MAX_DIR:
+                        output = output[:MAX_DIR] + "\n… [salida truncada]"
+                    return f"Coincidencias encontradas ({min(total, max_results)}) para '{query}' en {exp}:\n{output}{truncated}"
+                if proc.returncode > 1 and proc.stderr:
+                    return f"Error en búsqueda ripgrep: {proc.stderr.strip()}"
+            except subprocess.TimeoutExpired:
+                return "Error: la búsqueda ripgrep superó el tiempo límite (15s)."
+
+        return _python_grep_search(query, search_path, glob, case_sensitive, max_results)
+    except (OSError, ValueError) as e:
+        return f"Error en grep_search: {e}"
 
 
 def tool_file_info(path: str) -> str:
@@ -612,30 +976,190 @@ def tool_write_file(path: str, content: str, overwrite: bool = False) -> str:
         return f"Error escribiendo archivo: {e}"
 
 
+def _fuzzy_find_and_replace(
+    content: str,
+    target: str,
+    replacement: str,
+    similarity_threshold: float = 0.80,
+    hint_start_line: int | None = None,
+    hint_end_line: int | None = None,
+) -> tuple[str | None, str]:
+    """Busca target en content usando coincidencia exacta, normalizada y difusa.
+
+    Retorna (nuevo_contenido, mensaje_descriptivo).
+    Si no encuentra coincidencia adecuada o hay ambigüedad, retorna (None, error_msg).
+    """
+    if not target:
+        return None, "El parámetro 'target' está vacío."
+
+    c_lines = content.splitlines(keepends=True)
+    total_lines = len(c_lines)
+
+    # 1. Coincidencia exacta de subcadena
+    if target in content:
+        count = content.count(target)
+        if count == 1:
+            idx = content.find(target)
+            start_l = content[:idx].count("\n") + 1
+            end_l = start_l + target.count("\n")
+            new_text = content[:idx] + replacement + content[idx + len(target):]
+            return new_text, f"Reemplazo exacto exitoso (líneas {start_l}–{end_l})"
+        elif count > 1:
+            if hint_start_line is not None and hint_end_line is not None:
+                hint_start_idx = max(0, hint_start_line - 1)
+                hint_end_idx = min(total_lines, hint_end_line)
+                sub_content = "".join(c_lines[hint_start_idx:hint_end_idx])
+                if sub_content.count(target) == 1:
+                    sub_new = sub_content.replace(target, replacement, 1)
+                    new_text = (
+                        "".join(c_lines[:hint_start_idx])
+                        + sub_new
+                        + "".join(c_lines[hint_end_idx:])
+                    )
+                    return (
+                        new_text,
+                        f"Reemplazo exacto exitoso en rango de líneas {hint_start_line}–{hint_end_line}",
+                    )
+            return None, (
+                f"Error: se encontraron {count} ocurrencias idénticas del fragmento. "
+                "Incluye 1 o 2 líneas de contexto adicional antes o después para que sea único."
+            )
+
+    # 2. Coincidencia por líneas normalizadas (ignorando diferencias de espacios finales y saltos \r\n)
+    t_lines = target.splitlines(keepends=True)
+    t_stripped = [l.strip() for l in t_lines if l.strip()]
+    if not t_stripped:
+        return None, "El fragmento 'target' solo contiene espacios o líneas en blanco."
+
+    len_t_stripped = len(t_stripped)
+    matches = []
+    for i in range(len(c_lines) - len_t_stripped + 1):
+        window = [c_lines[i + j].strip() for j in range(len_t_stripped)]
+        if window == t_stripped:
+            matches.append((i, i + len_t_stripped))
+
+    if len(matches) == 1:
+        s_idx, e_idx = matches[0]
+        rep_lines = replacement.splitlines(keepends=True)
+        if rep_lines and not rep_lines[-1].endswith("\n") and c_lines[e_idx - 1].endswith("\n"):
+            rep_lines[-1] = rep_lines[-1] + "\n"
+        new_lines = c_lines[:s_idx] + rep_lines + c_lines[e_idx:]
+        return "".join(new_lines), f"Reemplazo normalizado exitoso (líneas {s_idx + 1}–{e_idx})"
+    elif len(matches) > 1:
+        return None, (
+            f"Error: se encontraron {len(matches)} coincidencias normalizadas del fragmento. "
+            "Añade más líneas de contexto circundante para desambiguar."
+        )
+
+    # 3. Coincidencia ignorando indentación común (dedent)
+    target_dedent = textwrap.dedent(target).strip()
+    if target_dedent:
+        dedent_matches = []
+        n_lines_target = len(t_lines)
+        for i in range(len(c_lines) - n_lines_target + 1):
+            window_slice = "".join(c_lines[i:i + n_lines_target])
+            if textwrap.dedent(window_slice).strip() == target_dedent:
+                dedent_matches.append((i, i + n_lines_target))
+        if len(dedent_matches) == 1:
+            s_idx, e_idx = dedent_matches[0]
+            rep_lines = replacement.splitlines(keepends=True)
+            if rep_lines and not rep_lines[-1].endswith("\n") and c_lines[e_idx - 1].endswith("\n"):
+                rep_lines[-1] = rep_lines[-1] + "\n"
+            new_lines = c_lines[:s_idx] + rep_lines + c_lines[e_idx:]
+            return "".join(new_lines), f"Reemplazo por indentación flexible exitoso (líneas {s_idx + 1}–{e_idx})"
+
+    # 4. Coincidencia difusa (fuzzy sliding window con difflib)
+    target_clean = "\n".join(t_stripped)
+    target_words = set(re.findall(r"\w+", target_clean.lower()))
+    if not target_words:
+        target_words = {target_clean.lower()}
+
+    line_scores = [len(target_words & set(re.findall(r"\w+", l.lower()))) for l in c_lines]
+
+    candidate_starts = set()
+    if total_lines <= 300:
+        candidate_starts = set(range(total_lines))
+    else:
+        for i in range(len(c_lines) - len_t_stripped + 1):
+            if sum(line_scores[i:i + len_t_stripped]) > 0:
+                candidate_starts.add(i)
+
+    best_ratio = 0.0
+    second_best_ratio = 0.0
+    best_span = None
+
+    for w_size in range(max(1, len_t_stripped - 2), min(total_lines + 1, len_t_stripped + 3)):
+        for i in candidate_starts:
+            if i + w_size <= total_lines:
+                w_lines = c_lines[i:i + w_size]
+                w_clean = "\n".join([l.strip() for l in w_lines if l.strip()])
+                ratio = difflib.SequenceMatcher(None, target_clean, w_clean).ratio()
+                if ratio > best_ratio:
+                    second_best_ratio = best_ratio
+                    best_ratio = ratio
+                    best_span = (i, i + w_size)
+                elif ratio > second_best_ratio and (best_span is None or abs(i - best_span[0]) > 2):
+                    second_best_ratio = ratio
+
+    if best_ratio >= similarity_threshold and best_span is not None:
+        if second_best_ratio >= similarity_threshold and (best_ratio - second_best_ratio) < 0.04:
+            return None, (
+                f"Error: se detectaron múltiples bloques similares con similitud cercana "
+                f"({int(best_ratio*100)}% y {int(second_best_ratio*100)}%). "
+                "Incluye más líneas de contexto para desambiguar."
+            )
+        s_idx, e_idx = best_span
+        rep_lines = replacement.splitlines(keepends=True)
+        if rep_lines and not rep_lines[-1].endswith("\n") and c_lines[e_idx - 1].endswith("\n"):
+            rep_lines[-1] = rep_lines[-1] + "\n"
+        new_lines = c_lines[:s_idx] + rep_lines + c_lines[e_idx:]
+        sim_pct = int(best_ratio * 100)
+        return "".join(new_lines), f"Reemplazo difuso exitoso (similitud: {sim_pct}% en líneas {s_idx + 1}–{e_idx})"
+
+    if best_span is not None and best_ratio > 0.4:
+        s_idx, e_idx = best_span
+        closest = "".join(c_lines[s_idx:e_idx])[:300]
+        return None, (
+            f"Error: no se encontró coincidencia suficiente para el fragmento (mejor similitud: {int(best_ratio*100)}% en líneas {s_idx + 1}–{e_idx}).\n"
+            f"Fragmento más cercano encontrado:\n{closest}\n"
+            "Verifica el fragmento o usa read_file para consultar el archivo actual."
+        )
+
+    return None, (
+        "Error: no se encontró el fragmento a reemplazar en el archivo. "
+        "Verifica que el texto exista o usa read_file para ver el contenido exacto."
+    )
+
+
 def tool_replace_lines(
     path: str,
-    start_line: int,
-    end_line: int,
-    new_content: str,
+    target: str | None = None,
+    replacement: str | None = None,
+    start_line: int | None = None,
+    end_line: int | None = None,
+    new_content: str | None = None,
 ) -> str:
-    """Reemplaza un rango de líneas en un archivo existente.
+    """Modifica un archivo existente reemplazando un fragmento de código o un rango de líneas.
 
-    Equivalente a un patch quirúrgico: sustituye las líneas [start_line, end_line]
-    (1-indexado, inclusivo) por new_content, sin tocar el resto del archivo.
-
-    Args:
-        path:        Ruta absoluta del archivo a modificar.
-        start_line:  Primera línea a reemplazar (1-indexado).
-        end_line:    Última línea a reemplazar (1-indexado, inclusivo).
-        new_content: Texto de reemplazo. Puede ser una o varias líneas.
-                     No necesita terminar con \\n; se añade automáticamente.
+    Soporta dos modalidades:
+    1. Búsqueda y reemplazo por fragmento ('target'):
+       Encuentra el fragmento de código/texto en el archivo utilizando coincidencia exacta,
+       normalizada o difusa (fuzzy search) y lo sustituye por replacement (o new_content).
+       Es la forma recomendada porque no requiere calcular números de línea.
+    2. Reemplazo por rango de líneas ('start_line', 'end_line'):
+       Sustituye las líneas [start_line, end_line] (1-indexado) por new_content o replacement.
     """
     try:
-        if len(new_content.encode("utf-8")) > MAX_TEXT_BYTES:
+        content_to_insert = replacement if replacement is not None else new_content
+        if content_to_insert is None:
+            return "Error: debes proporcionar el nuevo contenido ('replacement' o 'new_content')."
+
+        if len(content_to_insert.encode("utf-8")) > MAX_TEXT_BYTES:
             return (
                 "Error: el contenido nuevo supera el límite de "
                 f"{MAX_TEXT_BYTES} bytes"
             )
+
         p = _safe_path(path)
         exp = str(p)
         if not p.exists():
@@ -645,51 +1169,91 @@ def tool_replace_lines(
         if p.stat().st_size > MAX_TEXT_BYTES:
             return f"Error: el archivo supera el límite de {MAX_TEXT_BYTES} bytes"
 
-        start_line = max(1, int(start_line))
-        end_line   = max(start_line, int(end_line))
-
         with open(exp, "r", encoding="utf-8", errors="replace") as f:
-            original_lines = f.readlines()
+            original_text = f.read()
 
-        total_original = len(original_lines)
+        # Modalidad 1: Reemplazo por fragmento / búsqueda difusa
+        if target:
+            new_text, msg = _fuzzy_find_and_replace(
+                content=original_text,
+                target=target,
+                replacement=content_to_insert,
+                hint_start_line=start_line,
+                hint_end_line=end_line,
+            )
+            if new_text is None:
+                return msg
 
-        if start_line > total_original:
+            if len(new_text.encode("utf-8")) > MAX_TEXT_BYTES:
+                return (
+                    "Error: el archivo resultante supera el límite de "
+                    f"{MAX_TEXT_BYTES} bytes"
+                )
+
+            _atomic_write_text(p, new_text)
+            orig_line_count = original_text.count("\n") + (
+                1 if original_text and not original_text.endswith("\n") else 0
+            )
+            new_line_count = new_text.count("\n") + (
+                1 if new_text and not new_text.endswith("\n") else 0
+            )
             return (
-                f"[EOF] El archivo tiene {total_original} líneas. "
-                f"start_line={start_line} supera el total."
+                f"{msg} en {exp}\n"
+                f"Total líneas: {orig_line_count} → {new_line_count}"
             )
 
-        # Asegurar que el nuevo contenido termina con \n
-        replacement = new_content if new_content.endswith("\n") else new_content + "\n"
-        replacement_lines = replacement.splitlines(keepends=True)
+        # Modalidad 2: Reemplazo por líneas explícitas (compatibilidad retroactiva)
+        if start_line is not None and end_line is not None:
+            original_lines = original_text.splitlines(keepends=True)
+            total_original = len(original_lines)
 
-        # Splice: antes del rango + reemplazo + después del rango
-        new_lines = (
-            original_lines[:start_line - 1]
-            + replacement_lines
-            + original_lines[end_line:]
-        )
+            start_line = max(1, int(start_line))
+            end_line = max(start_line, int(end_line))
 
-        if len("".join(new_lines).encode("utf-8")) > MAX_TEXT_BYTES:
-            return (
-                "Error: el archivo resultante supera el límite de "
-                f"{MAX_TEXT_BYTES} bytes"
+            if start_line > total_original:
+                return (
+                    f"[EOF] El archivo tiene {total_original} líneas. "
+                    f"start_line={start_line} supera el total."
+                )
+
+            replacement_str = (
+                content_to_insert
+                if content_to_insert.endswith("\n")
+                else content_to_insert + "\n"
+            )
+            replacement_lines = replacement_str.splitlines(keepends=True)
+
+            new_lines = (
+                original_lines[:start_line - 1]
+                + replacement_lines
+                + original_lines[end_line:]
             )
 
-        _atomic_write_text(p, "".join(new_lines))
+            result_text = "".join(new_lines)
+            if len(result_text.encode("utf-8")) > MAX_TEXT_BYTES:
+                return (
+                    "Error: el archivo resultante supera el límite de "
+                    f"{MAX_TEXT_BYTES} bytes"
+                )
 
-        removed  = end_line - start_line + 1
-        added    = len(replacement_lines)
-        total_new = len(new_lines)
+            _atomic_write_text(p, result_text)
+            removed = end_line - start_line + 1
+            added = len(replacement_lines)
+            total_new = len(new_lines)
+
+            return (
+                f"Reemplazo exitoso en {exp}\n"
+                f"Líneas {start_line}–{end_line} reemplazadas "
+                f"(-{removed} línea(s) → +{added} línea(s))\n"
+                f"Total líneas: {total_original} → {total_new}"
+            )
 
         return (
-            f"Reemplazo exitoso en {exp}\n"
-            f"Líneas {start_line}–{end_line} reemplazadas "
-            f"(-{removed} línea(s) → +{added} línea(s))\n"
-            f"Total líneas: {total_original} → {total_new}"
+            "Error: debes proporcionar un fragmento a buscar ('target') o "
+            "un rango de líneas ('start_line' y 'end_line')."
         )
     except (OSError, TypeError, ValueError) as e:
-        return f"Error reemplazando líneas: {e}"
+        return f"Error modificando archivo: {e}"
 
 
 def _set_docx_font(style, name: str, size, color: str | None = None) -> None:

@@ -42,6 +42,10 @@ _KEYWORD_HINTS: dict[str, list[str]] = {
     "read_pptx": ["powerpoint", "pptx", "diapositivas", "presentacion"],
     "read_excel": ["excel", "xlsx", "csv", "hoja de calculo", "tabla"],
     "launch_app": ["abrir app", "lanzar aplicacion", "ejecutar programa", "desktop app", "launcher", "juego", "game"],
+    "grep_search": ["grep", "ripgrep", "rg", "buscar contenido", "buscar texto", "buscar codigo", "buscar función", "buscar clase"],
+    "find_files": ["fd", "find", "buscar archivo", "buscar carpeta", "encontrar archivo", "localizar", "buscar por nombre"],
+    "directory_tree": ["tree", "arbol", "árbol", "estructura", "jerarquia", "jerarquía", "carpetas del proyecto", "ver proyecto"],
+    "replace_lines": ["reemplazar", "editar archivo", "modificar archivo", "cambiar codigo", "fuzzy replace", "patch", "sustituir texto"],
 }
 
 

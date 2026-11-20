@@ -319,6 +319,18 @@ Item {
             let p = args && args.path ? args.path.split('/').pop() : ""
             return "  Listando directorio" + (p ? " " + p + "…" : "…")
         }
+        if (t === "directory_tree") {
+            let p = args && args.path ? args.path.split('/').pop() : ""
+            return "󰙅  Estructura en árbol" + (p ? " " + p + "…" : "…")
+        }
+        if (t === "find_files") {
+            let p = args && args.pattern ? args.pattern : ""
+            return "󰈞  Buscando archivos" + (p ? ": \"" + p + "\"…" : "…")
+        }
+        if (t === "grep_search") {
+            let q = args && args.query ? args.query : ""
+            return "󰍉  Buscando contenido" + (q ? ": \"" + q + "\"…" : "…")
+        }
         if (t === "read_file" || t === "read_pdf" || t === "read_docx" || t === "read_pptx" || t === "read_excel") {
             let msg = "󰈙  Leyendo archivo"
             if (args && args.path) {
@@ -341,7 +353,16 @@ Item {
         if (t === "manage_tasks") return "󰃭  Gestionando tareas…"
         if (t === "capture_screen") return "󰹑  Tomando captura de pantalla…"
         if (t === "write_file") return "  Escribiendo archivo…"
-        if (t === "replace_lines") return "  Editando archivo…"
+        if (t === "replace_lines") {
+            let p = args && args.path ? args.path.split('/').pop() : ""
+            if (args && args.target) {
+                return "  Editando " + (p ? p : "archivo") + " (búsqueda difusa)…"
+            }
+            if (args && args.start_line !== undefined && args.end_line !== undefined) {
+                return "  Editando " + (p ? p : "archivo") + " (líneas " + args.start_line + "-" + args.end_line + ")…"
+            }
+            return "  Editando archivo" + (p ? " " + p + "…" : "…")
+        }
         if (t === "create_docx" || t === "modify_docx") return "  Modificando documento…"
         if (t === "query_document") return "󰈙  Consultando documento…"
         if (t === "launch_app") return "  Lanzando aplicación…"
